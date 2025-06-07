@@ -12,7 +12,18 @@ void UVR64DLBusSensor::loop() {
     uint8_t byte = this->read();
     this->buffer_.push_back(byte);
 
-    if (this->buffer_.size() >= 32) {
+    // Discard bytes until the expected start sequence is detected
+    if (this->buffer_.size() >= 2) {
+      while (!this->buffer_.empty() && this->buffer_[0] != START_BYTE_1) {
+        this->buffer_.erase(this->buffer_.begin());
+      }
+      if (this->buffer_.size() >= 2 && this->buffer_[1] != START_BYTE_2) {
+        this->buffer_.erase(this->buffer_.begin());
+        continue;
+      }
+    }
+
+    if (this->buffer_.size() >= FRAME_SIZE) {
       if (is_valid(this->buffer_)) {
         parse_dl_bus(this->buffer_);
         this->buffer_.clear();
@@ -24,7 +35,18 @@ void UVR64DLBusSensor::loop() {
 }
 
 bool UVR64DLBusSensor::is_valid(const std::vector<uint8_t> &data) {
-  return data.size() >= 32;
+  if (data.size() < FRAME_SIZE)
+    return false;
+
+  if (data[0] != START_BYTE_1 || data[1] != START_BYTE_2)
+    return false;
+
+  uint8_t checksum = 0;
+  for (size_t i = 0; i < FRAME_SIZE - 1; i++) {
+    checksum += data[i];
+  }
+
+  return checksum == data[FRAME_SIZE - 1];
 }
 
 void UVR64DLBusSensor::parse_dl_bus(const std::vector<uint8_t> &data) {
