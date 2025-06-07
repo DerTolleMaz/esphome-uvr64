@@ -8,18 +8,16 @@ namespace uvr64_dlbus {
 static const char *const TAG = "uvr64_dlbus";
 
 void UVR64DLBusSensor::loop() {
-  static std::vector<uint8_t> buffer;
-
   while (this->available()) {
     uint8_t byte = this->read();
-    buffer.push_back(byte);
+    this->buffer_.push_back(byte);
 
-    if (buffer.size() >= 32) {
-      if (is_valid(buffer)) {
-        parse_dl_bus(buffer);
-        buffer.clear();
+    if (this->buffer_.size() >= 32) {
+      if (is_valid(this->buffer_)) {
+        parse_dl_bus(this->buffer_);
+        this->buffer_.clear();
       } else {
-        buffer.erase(buffer.begin());
+        this->buffer_.erase(this->buffer_.begin());
       }
     }
   }

@@ -26,6 +26,8 @@ class UVR64DLBusSensor : public Component, public uart::UARTDevice {
   std::vector<sensor::Sensor *> temp_sensors;
   std::vector<sensor::Sensor *> relay_sensors;
 
+  std::vector<uint8_t> buffer_;
+
   void parse_dl_bus(const std::vector<uint8_t> &data);
   bool is_valid(const std::vector<uint8_t> &data);
 };
