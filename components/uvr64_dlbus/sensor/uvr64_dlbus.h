@@ -28,6 +28,10 @@ class UVR64DLBusSensor : public Component, public uart::UARTDevice {
 
   std::vector<uint8_t> buffer_;
 
+  static const uint8_t START_BYTE_1 = 0xAA;
+  static const uint8_t START_BYTE_2 = 0x55;
+  static const size_t FRAME_SIZE = 32;
+
   void parse_dl_bus(const std::vector<uint8_t> &data);
   bool is_valid(const std::vector<uint8_t> &data);
 };
