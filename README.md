@@ -37,6 +37,80 @@ A complete frame from the UVR64 typically looks like this:
 | 20   | Relay status               | 1 byte, bit-encoded (8 relays)         |
 | 21   | Checksum                   | Additive checksum over bytes 0–20      |
 
+# TA DL-Bus Protocol – Technical Signal Description
+
+This document summarizes how the **DL-Bus signal transmission** works as implemented by *Technische Alternative* in controllers like the **UVR64**.
+
+---
+
+## 🔁 Continuous Frame Transmission
+
+- The controller continuously transmits **data frames in a loop** on the data line.
+- To **detect the start** of each frame, a **SYNC sequence of 16 High bits** is sent before the first data byte.
+
+---
+
+## 🔀 XOR with Display Clock
+
+- Before data is output to the bus, it is **XOR-modulated** with a square wave signal called the **display clock**:
+  - Either **50 Hz** or **488 Hz**, depending on the controller type.
+- This is used to **power bus receivers** from the signal itself.
+- The signal on the line is **inverted** by the output transistor.
+
+### 📌 Synchronization:
+> If the receiver is synchronized to the display clock, the correct bit value can be read **during the second half-period** of each data bit.
+
+---
+
+## ⏱️ Timing by Controller Type
+
+| Controller Type        | Display Clock | Bit Duration | Frame Duration |
+|------------------------|----------------|--------------|----------------|
+| UVR31, UVR42, UVR64, HZR65, EEG30, TFM66 | 50 Hz         | 20 ms         | 1.9–3.1 sec     |
+| UVR1611, UVR61-3       | 488 Hz          | 2.048 ms     | ~0.75–1.35 sec |
+
+> The total duration is determined by: SYNC + number of data bytes × bit duration
+
+---
+
+## 🔄 Bitstream and Logic
+
+- The DL-Bus uses **XOR modulation** with a square wave to encode the data.
+- **Inversion** is applied via an **output transistor**.
+- Receivers should **sample in the second half** of each data bit to correctly interpret the signal.
+
+---
+
+## 🧠 Implications for ESP / UART reading
+
+To successfully read DL-Bus data with a microcontroller (e.g. ESP32):
+
+- UART must be set to **2400 baud**
+- A **buffer** must store an entire frame (~22 bytes for UVR64)
+- A **SYNC pattern (e.g., 0xFF x 2)** must be used to identify frame starts
+- Signal must be **filtered or decoded** if XOR-modulated raw signal is read directly
+- A proper **optocoupler circuit with pull-up** is essential for safe and clean signal reading
+
+---
+
+## ✅ Summary
+
+| Property                     | Value / Note                                |
+|------------------------------|---------------------------------------------|
+| UART Baud Rate               | 2400 baud                                   |
+| Signal Encoding              | XOR with Display Clock                      |
+| Display Clock Frequency      | 50 Hz or 488 Hz                             |
+| Bit Polarity                 | Inverted (via transistor)                   |
+| Frame Sync                   | 16 High bits                                |
+| Frame Size (UVR64)           | 22 bytes                                    |
+
+---
+
+For reliable decoding, either:
+- Use a **hardware-decoded signal** (e.g. output from a TA module), or
+- Decode the **XOR timing pattern** in firmware
+
+
 ### Example: Temperature values
 
 A temperature value consists of two bytes:
