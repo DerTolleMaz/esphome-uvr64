@@ -1,35 +1,41 @@
+# uvr64_dlbus for ESPHome
+
+Custom ESPHome component to read data from a UVR64 controller via DL-Bus using UART.
+
+## DL-Bus electrical interface
+
 # TA DL-Bus Protocol – Explanation
 
-This file describes the **DL-Bus protocol** used by *Technische Alternative (TA)*, for example in the **UVR64** controller. This protocol allows the **reading of temperatures and relay states** via a serial line.
+This file describes the **DL-Bus protocol** from *Technische Alternative (TA)*, as used for example in the **UVR64** controller. This protocol enables the **reading of temperature values and relay states** over a serial line.
 
 ---
 
-## 📡 Characteristics of the DL-Bus
+## 📡 DL-Bus Characteristics
 
-| Property              | Value                               |
-|-----------------------|-------------------------------------|
-| Signal type           | Serial (UART-like)                  |
-| Baud rate             | 2400 baud                           |
-| Signal level          | ~5 V, not TTL compatible            |
-| Direction             | Unidirectional (UVR ➝ receiver)     |
-| Frame length          | Fixed: 22 bytes (UVR64)             |
-| Checksum              | 1-byte additive checksum            |
-| Isolation recommended | Yes, galvanic (e.g., with PC817)    |
+| Property            | Value                               |
+|---------------------|-------------------------------------|
+| Signal type         | Serial (UART-like)                  |
+| Baud rate           | 2400 baud                           |
+| Signal level        | ~5 V, not TTL-compatible            |
+| Direction           | Unidirectional (UVR ➝ receiver)     |
+| Frame length        | Fixed: 22 bytes (UVR64)             |
+| Checksum            | 1-byte additive checksum            |
+| Isolation recommended | Yes, galvanic (e.g., with PC817)  |
 
 ---
 
-## 🧱 Structure of a Frame
+## 🧱 Frame Structure
 
-A complete frame on the UVR64 looks like this:
+A complete frame from the UVR64 typically looks like this:
 
-| Byte | Content                    | Description                          |
-|------|----------------------------|--------------------------------------|
-| 0    | `0xAA`                     | Start byte 1                         |
-| 1    | `0x10`                     | Start byte 2                         |
-| 2–13 | Temperature data           | 6 × 16-bit (big endian, in 0.1 °C)   |
-| 14–19| Status data                | Mostly unused / reserved             |
-| 20   | Relay status               | 1 byte, bit-encoded (8 relays)       |
-| 21   | Checksum                   | Additive checksum of bytes 0–20      |
+| Byte | Content                    | Description                            |
+|------|----------------------------|----------------------------------------|
+| 0    | `0xAA`                     | Start byte 1                           |
+| 1    | `0x10`                     | Start byte 2                           |
+| 2–13 | Temperature data           | 6 × 16-bit (big endian, each in 0.1 °C)|
+| 14–19| Status data                | mostly unused / reserved               |
+| 20   | Relay status               | 1 byte, bit-encoded (8 relays)         |
+| 21   | Checksum                   | Additive checksum over bytes 0–20      |
 
 ### Example: Temperature values
 
@@ -53,23 +59,96 @@ bool relay2 = (data[20] >> 1) & 0x01;
 ## ✅ Implementation Notes
 
 - Use an **optocoupler** (e.g., PC817) to isolate the ESP or D1 Mini from the DL-Bus.
-- Make sure your UART runs at 2400 baud.
+- Ensure your UART runs at 2400 baud.
 - Start bytes and checksum must be respected during parsing.
-- The DL-Bus sends data regularly – no polling is required.
+- The DL-Bus transmits data continuously – no polling is needed.
 
 ---
 
 ## 🧪 Common Issues
 
-- No galvanic isolation → risk of damage to the microcontroller
+- No galvanic isolation → damage to the microcontroller
 - Wrong start bytes (e.g., for UVR16x)
-- Wrong UART baud rate
-- Checksum errors from truncated frames
+- UART set to wrong baud rate
+- Checksum errors due to incomplete frames
 
 ---
 
-## 🔗 Further Resources
+## 🔗 Additional References
 
-- The protocol is **not officially documented** by TA, but has been well analyzed by the community:
-    - [DL-Bus protocol analysis on openTA](https://open-ta.org)
-    - [TA-DL-Bus GitHub projects](https://github.com/search?q=ta+dlbus)
+- The protocol is **not officially documented** by TA but has been well analyzed by community projects like:
+  - [DL-Bus protocol analysis on openTA](https://open-ta.org)
+  - [TA-DL-Bus GitHub projects](https://github.com/search?q=ta+dlbus)
+
+---
+
+The DL-Bus used by the UVR64 controller operates around **15–24 V DC**. The levels are not compatible with a 3.3 V UART interface, so the bus must **not** be connected directly to the ESP32's RX pin. Use galvanic isolation (e.g., an optocoupler) and limit the bus current via a resistor.
+
+Top view (notch up, pins downward):
+```
+       _________
+      |         |
+   1 -|●        |- 4
+   2 -|         |- 3
+      |_________|
+
+       PC817 DIP-4
+```
+
+| Pin | Name          | Function             | In your circuit                        |
+| --- | ------------- | -------------------- |----------------------------------------|
+| 1   | **Anode**     | LED + (input)        | DL-Bus signal via 1 kΩ resistor        |
+| 2   | **Cathode**   | LED –                | DL-Bus GND                             |
+| 3   | **Collector** | Transistor output +  | ➝ D1 Mini RX (GPIO3) + 10 kΩ Pull-Up to 3.3 V |
+| 4   | **Emitter**   | Transistor output –  | ➝ GND of the D1 Mini                   |
+
+A simple interface can look like this:
+
+```
+DL-Bus (+15–24 V)
+     |
+     | 
+    [1kΩ Resistor]              
+     |
+     |        PC817 (Top view, pin numbers)
+     |        +------------------+
+     |        |      4 (Emitter) |------------> GND (D1 Mini)
+     |        |                  |
+     +------->| 1 (Anode)        |       [10kΩ Pull-Up]
+              |                  |        +----[R]----+
+DL-Bus GND -->| 2 (Cathode)      |       |           |
+              |                  |      [3]         3.3 V
+              |                  |       |           |
+              |     3 (Collector)|-------+----> RX (GPIO3, D1 Mini)
+              |                  |
+              +------------------+
+```
+
+* The input resistor limits the current through the LED of the optocoupler.
+* The optocoupler's output transistor pulls the ESP32 RX line low when the bus is active.
+* Add a pull-up resistor (e.g., 10 kΩ) from ESP32 RX to 3.3 V.
+
+## Example ESPHome configuration
+
+```yaml
+uart:
+  id: dl_uart
+  rx_pin: GPIO16
+  baud_rate: 9600
+
+sensor:
+  - platform: uvr64_dlbus
+    uart_id: dl_uart
+    temperatures:
+      - name: "UVR64 Temp 1"
+      - name: "UVR64 Temp 2"
+      - name: "UVR64 Temp 3"
+      - name: "UVR64 Temp 4"
+      - name: "UVR64 Temp 5"
+      - name: "UVR64 Temp 6"
+    relays:
+      - name: "UVR64 Relay 1"
+      - name: "UVR64 Relay 2"
+      - name: "UVR64 Relay 3"
+      - name: "UVR64 Relay 4"
+```
