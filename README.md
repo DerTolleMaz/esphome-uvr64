@@ -133,8 +133,15 @@ DL-Bus GND -->| 2 (Cathode)      |       |           |
 ```yaml
 uart:
   id: dl_uart
-  rx_pin: GPIO16
-  baud_rate: 9600
+  rx_pin: RX
+  baud_rate: 2400
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/DerTolleMaz/esphome-uvr64
+    components: [uvr64_dlbus]
+
 
 sensor:
   - platform: uvr64_dlbus
