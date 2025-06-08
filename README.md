@@ -6,12 +6,49 @@ Custom ESPHome component to read data from a UVR64 controller via DL-Bus using U
 
 The DL-Bus used by the UVR64 controller operates around **15–24 V DC**. The levels are not compatible with a 3.3 V UART interface, so the bus must **not** be connected directly to the ESP32's RX pin. Use galvanic isolation (for example an optocoupler) and limit the bus current via a resistor.
 
+Obenansicht (Kerbe oben, Pins nach unten)
+```
+   Obenansicht (Kerbe oben, Pins nach unten)
+
+       _________
+      |         |
+   1 -|●        |- 4
+   2 -|         |- 3
+      |_________|
+
+       PC817 DIP-4
+```
+| Pin | Name          | Funktion             | Anschluss in deiner Schaltung                 |
+| --- | ------------- | -------------------- | --------------------------------------------- |
+| 1   | **Anode**     | LED + (Eingang)      | DL-Bus-Signal über 1 kΩ Widerstand            |
+| 2   | **Kathode**   | LED –                | DL-Bus GND                                    |
+| 3   | **Collector** | Transistor-Ausgang + | ➝ D1 Mini RX (GPIO3) + Pull-Up 10 kΩ zu 3.3 V |
+| 4   | **Emitter**   | Transistor-Ausgang – | ➝ GND vom D1 Mini                             |
+
+
+
 A simple interface can look like this:
 
 ```
-DL-Bus + -----[2.2kΩ]---->|----+------- ESP32 RX (pulled up to 3.3 V)
-                optocoupler   |
-DL-Bus - ---------------------+---- ESP32 GND
+DL-Bus (+15–24 V)
+     |
+     | 
+    [1kΩ Vorwiderstand]              
+     |
+     |        PC817 (Ansicht von oben, PIN-Nr.)
+     |        +------------------+
+     |        |      4 (Emitter) |------------> GND (D1 Mini)
+     |        |                  |
+     +------->| 1 (Anode)        |       [10kΩ Pull-Up]
+              |                  |        +----[R]----+
+DL-Bus GND -->| 2 (Kathode)      |       |           |
+              |                  |      [5]         3.3 V
+              |                  |       |           |
+              |     3 (Kollektor)|-------+----> RX (GPIO3, D1 Mini)
+              |                  |
+              +------------------+
+                     
+                     
 ```
 
 * The input resistor limits the LED current of the optocoupler.
@@ -41,8 +78,4 @@ sensor:
       - name: "UVR64 Relay 2"
       - name: "UVR64 Relay 3"
       - name: "UVR64 Relay 4"
-      - name: "UVR64 Relay 5"
-      - name: "UVR64 Relay 6"
-      - name: "UVR64 Relay 7"
-      - name: "UVR64 Relay 8"
 ```
