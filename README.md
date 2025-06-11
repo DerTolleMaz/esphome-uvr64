@@ -204,6 +204,10 @@ DL-Bus GND -->| 2 (Cathode)      |       |           |
 
 ## Example ESPHome configuration
 
+Initialization messages from `UVR64DLBusSensor` are printed through ESPHome's
+`logger` component. Ensure this component is enabled so you can observe the
+sensor starting up.
+
 ```yaml
 uart:
   id: dl_uart
@@ -215,7 +219,9 @@ external_components:
       type: git
       url: https://github.com/DerTolleMaz/esphome-uvr64
     components: [uvr64_dlbus]
-
+logger:
+  level: DEBUG
+  baud_rate: 0
 
 sensor:
   - platform: uvr64_dlbus

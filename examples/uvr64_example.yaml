@@ -10,6 +10,9 @@ external_components:
       type: git
       url: https://github.com/DerTolleMaz/esphome-uvr64
     components: [uvr64_dlbus]
+logger:
+  level: DEBUG
+  baud_rate: 0
 
 sensor:
   - platform: uvr64_dlbus
