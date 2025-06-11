@@ -220,6 +220,7 @@ external_components:
 sensor:
   - platform: uvr64_dlbus
     uart_id: dl_uart
+    decode_xor: true
     temperatures:
       - name: "UVR64 Temp 1"
       - name: "UVR64 Temp 2"

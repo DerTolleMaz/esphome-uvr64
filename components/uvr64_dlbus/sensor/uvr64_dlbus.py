@@ -3,12 +3,16 @@ import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import sensor, uart
 from esphome.const import (
-    CONF_ID, CONF_UART_ID, UNIT_CELSIUS,
-    DEVICE_CLASS_TEMPERATURE, ICON_THERMOMETER
+    CONF_ID,
+    CONF_UART_ID,
+    UNIT_CELSIUS,
+    DEVICE_CLASS_TEMPERATURE,
+    ICON_THERMOMETER,
 )
 
 CONF_TEMPERATURES = "temperatures"
 CONF_RELAYS = "relays"
+CONF_DECODE_XOR = "decode_xor"
 
 uvr64_ns = cg.esphome_ns.namespace("uvr64_dlbus")
 UVR64DLBusSensor = uvr64_ns.class_("UVR64DLBusSensor", cg.Component, uart.UARTDevice)
@@ -22,7 +26,8 @@ CONFIG_SCHEMA = cv.Schema({
         icon=ICON_THERMOMETER,
         device_class=DEVICE_CLASS_TEMPERATURE)),
     cv.Required(CONF_RELAYS): cv.ensure_list(sensor.sensor_schema(
-        accuracy_decimals=0))
+        accuracy_decimals=0)),
+    cv.Optional(CONF_DECODE_XOR, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
@@ -42,3 +47,5 @@ async def to_code(config):
         sens = await sensor.new_sensor(s)
         rels.append(sens)
     cg.add(var.set_relays(rels))
+
+    cg.add(var.set_decode_xor(config[CONF_DECODE_XOR]))
