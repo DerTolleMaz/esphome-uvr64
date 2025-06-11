@@ -1,6 +1,8 @@
 
 #include "uvr64_dlbus.h"
 #include "esphome/core/log.h"
+#include "esphome/core/helpers.h"
+#include <esp_log.h>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -27,6 +29,7 @@ void UVR64DLBusSensor::loop() {
 
     if (this->buffer_.size() >= FRAME_SIZE) {
       if (is_valid(this->buffer_)) {
+        ESP_LOGD(TAG, "DL frame: %s", format_hex_pretty(this->buffer_).c_str());
         parse_dl_bus(this->buffer_);
         this->buffer_.clear();
       } else {
