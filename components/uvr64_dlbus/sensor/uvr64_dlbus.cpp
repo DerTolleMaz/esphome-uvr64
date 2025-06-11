@@ -10,6 +10,8 @@ static const char *const TAG = "uvr64_dlbus";
 void UVR64DLBusSensor::loop() {
   while (this->available()) {
     uint8_t byte = this->read();
+    if (this->decode_xor_)
+      byte ^= 0xFF;
     this->buffer_.push_back(byte);
 
     // Discard bytes until the expected start sequence is detected
