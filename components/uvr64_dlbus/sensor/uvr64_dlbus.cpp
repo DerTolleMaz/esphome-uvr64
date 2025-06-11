@@ -2,7 +2,6 @@
 #include "uvr64_dlbus.h"
 #include "esphome/core/log.h"
 #include "esphome/core/helpers.h"
-#include <esp_log.h>
 
 namespace esphome {
 namespace uvr64_dlbus {
