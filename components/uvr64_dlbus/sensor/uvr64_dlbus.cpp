@@ -9,11 +9,17 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
+void UVR64DLBusSensor::setup() {
+  ESP_LOGCONFIG(TAG, "Starting UVR64 DL-Bus sensor");
+  ESP_LOGCONFIG(TAG, "  decode_xor: %s", this->decode_xor_ ? "true" : "false");
+}
+
 void UVR64DLBusSensor::loop() {
   while (this->available()) {
     uint8_t byte = this->read();
     if (this->decode_xor_)
       byte ^= 0xFF;
+    ESP_LOGVV(TAG, "UART byte: 0x%02X", byte);
     this->buffer_.push_back(byte);
 
     // Discard bytes until the expected start sequence is detected
