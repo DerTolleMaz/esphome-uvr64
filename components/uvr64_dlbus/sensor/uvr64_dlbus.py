@@ -49,3 +49,5 @@ async def to_code(config):
     cg.add(var.set_relays(rels))
 
     cg.add(var.set_decode_xor(config[CONF_DECODE_XOR]))
+
+    return var
