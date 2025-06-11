@@ -15,7 +15,11 @@ CONF_RELAYS = "relays"
 CONF_DECODE_XOR = "decode_xor"
 
 uvr64_ns = cg.esphome_ns.namespace("uvr64_dlbus")
-UVR64DLBusSensor = uvr64_ns.class_("UVR64DLBusSensor", cg.Component, uart.UARTDevice)
+UVR64DLBusSensor = uvr64_ns.class_(
+    "UVR64DLBusSensor",
+    cg.Component,
+    uart.UARTDevice,
+)
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(UVR64DLBusSensor),
@@ -29,6 +33,7 @@ CONFIG_SCHEMA = cv.Schema({
         accuracy_decimals=0)),
     cv.Optional(CONF_DECODE_XOR, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
+
 
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])

@@ -2,6 +2,7 @@
 
 from typing import List
 
+
 class DummySensor:
     """Simple sensor placeholder used for unit tests."""
 
@@ -12,7 +13,11 @@ class DummySensor:
         self.state = value
 
 
-def parse_dl_bus(data: List[int], temp_sensors: List[DummySensor], relay_sensors: List[DummySensor]):
+def parse_dl_bus(
+    data: List[int],
+    temp_sensors: List[DummySensor],
+    relay_sensors: List[DummySensor],
+):
     """Parse a raw DL-Bus frame and update sensors.
 
     The function mimics the logic implemented in the C++ component.

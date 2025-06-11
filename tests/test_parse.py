@@ -1,7 +1,14 @@
 import pytest
-import importlib.util, os
+import importlib.util
+import os
 
-module_path = os.path.join(os.path.dirname(__file__), "..", "components", "uvr64_dlbus", "parse_dl_bus.py")
+module_path = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "components",
+    "uvr64_dlbus",
+    "parse_dl_bus.py",
+)
 spec = importlib.util.spec_from_file_location("parse_dl_bus", module_path)
 parse_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(parse_mod)
