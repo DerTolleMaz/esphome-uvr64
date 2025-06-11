@@ -234,3 +234,15 @@ sensor:
       - name: "UVR64 Relay 3"
       - name: "UVR64 Relay 4"
 ```
+
+
+See `examples/uvr64_example.yaml` for a complete example configuration.
+
+### Running the unit tests
+
+Install `pytest` and execute the tests from the repository root:
+
+```bash
+pip install pytest
+pytest
+```
