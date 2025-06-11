@@ -12,7 +12,7 @@ class UVR64DLBusSensor : public Component, public uart::UARTDevice {
  public:
   UVR64DLBusSensor() : UARTDevice() {}
 
-  void setup() override {}
+  void setup() override;
   void loop() override;
 
   void set_parent(uart::UARTComponent *parent) {
