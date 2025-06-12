@@ -6,6 +6,22 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
+void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
+  if (index >= 0 && index < 6) {
+    temp_sensors_[index] = sensor;
+  } else {
+    ESP_LOGW(TAG, "Temp sensor index %d out of bounds", index);
+  }
+}
+
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4) {
+    relay_sensors_[index] = sensor;
+  } else {
+    ESP_LOGW(TAG, "Relay sensor index %d out of bounds", index);
+  }
+}
+
 void DLBusSensor::setup() {
   pinMode(pin_, INPUT);
   last_edge_ = micros();
