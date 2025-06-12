@@ -15,6 +15,9 @@ void DLBusSensor::setup() {
 void DLBusSensor::update() {
   if (frame_ready_) {
     parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
     frame_ready_ = false;
   }
 }
