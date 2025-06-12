@@ -47,6 +47,11 @@ sensor:
 
 Nutze `source: local` und `path: ./components` in deiner YAML-Datei.
 
+## Build
+
+Installiere ESPHome und führe `esphome compile uvr64_dlbus.yaml` aus.
+PlatformIO alleine löst Abhängigkeiten wie `binary_sensor.h` nicht auf.
+
 ## Lizenz
 
 Dieses Projekt steht unter der MIT-Lizenz – siehe die Datei [LICENSE](LICENSE) für Details.
