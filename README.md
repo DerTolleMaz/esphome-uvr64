@@ -21,3 +21,7 @@ external_components:
 ## Lokaler Test
 
 Nutze `source: local` und `path: ./custom_components` in deiner YAML-Datei.
+
+## Lizenz
+
+Dieses Projekt steht unter der MIT-Lizenz – siehe die Datei [LICENSE](LICENSE) für Details.
