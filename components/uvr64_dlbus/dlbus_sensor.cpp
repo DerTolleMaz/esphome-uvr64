@@ -1,3 +1,4 @@
+// MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
