@@ -19,6 +19,7 @@ external_components:
 
 sensor:
   - platform: uvr64_dlbus
+    id: uvr64_bus
     pin: D1
     temp_sensors:
       - name: "Temp 1"
