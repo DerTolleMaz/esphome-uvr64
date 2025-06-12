@@ -8,6 +8,14 @@ Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266
 - 4 Relaiszustände
 - Dekodierung über Manchester-Code
 
+## Installation
+
+Installiere die notwendigen Python-Abhängigkeiten mit
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Verwendung
 
 ```yaml
