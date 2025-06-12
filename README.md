@@ -14,7 +14,7 @@ Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266
 external_components:
   - source:
       type: git
-      url: https://github.com/DEIN-BENUTZERNAME/uvr64-dlbus-esphome
+      url: https://github.com/DerTolleMaz/esphome-uvr64
     components: [uvr64_dlbus]
 ```
 
