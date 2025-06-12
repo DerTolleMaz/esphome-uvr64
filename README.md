@@ -16,6 +16,22 @@ external_components:
       type: local
       path: ./custom_components
     components: [uvr64_dlbus]
+
+sensor:
+  - platform: uvr64_dlbus
+    pin: D1
+    temp_sensors:
+      - name: "Temp 1"
+      - name: "Temp 2"
+      - name: "Temp 3"
+      - name: "Temp 4"
+      - name: "Temp 5"
+      - name: "Temp 6"
+    relay_sensors:
+      - name: "Relais 1"
+      - name: "Relais 2"
+      - name: "Relais 3"
+      - name: "Relais 4"
 ```
 
 ## Lokaler Test
