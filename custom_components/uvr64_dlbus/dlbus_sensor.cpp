@@ -19,6 +19,16 @@ void DLBusSensor::update() {
   }
 }
 
+void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
+  if (index >= 0 && index < 6)
+    temp_sensors_[index] = sensor;
+}
+
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4)
+    relay_sensors_[index] = sensor;
+}
+
 void IRAM_ATTR DLBusSensor::isr(void *arg) {
   auto *self = static_cast<DLBusSensor *>(arg);
   unsigned long now = micros();
