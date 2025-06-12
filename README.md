@@ -14,7 +14,7 @@ Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266
 external_components:
   - source:
       type: local
-      path: ./custom_components
+      path: ./components
     components: [uvr64_dlbus]
 
 sensor:
@@ -36,7 +36,7 @@ sensor:
 
 ## Lokaler Test
 
-Nutze `source: local` und `path: ./custom_components` in deiner YAML-Datei.
+Nutze `source: local` und `path: ./components` in deiner YAML-Datei.
 
 ## Lizenz
 
