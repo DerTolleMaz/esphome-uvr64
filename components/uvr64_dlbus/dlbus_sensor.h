@@ -1,3 +1,4 @@
+// MIT License - see LICENSE file in the project root for full details.
 #pragma once
 
 #include "esphome/components/sensor/sensor.h"
