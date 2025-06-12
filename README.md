@@ -1,4 +1,4 @@
-# UVR64 DL-Bus für ESPHome (External Component)
+# UVR64 DL-Bus für ESPHome
 
 Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266) aus.
 
@@ -13,8 +13,8 @@ Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266
 ```yaml
 external_components:
   - source:
-      type: git
-      url: https://github.com/DerTolleMaz/esphome-uvr64
+      type: local
+      path: ./custom_components
     components: [uvr64_dlbus]
 ```
 
