@@ -1,6 +1,7 @@
 esphome:
   name: uvr64_dlbus
-  platform: ESP8266
+
+esp8266:
   board: d1_mini
 
 external_components:
