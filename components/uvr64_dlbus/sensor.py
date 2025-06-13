@@ -21,7 +21,8 @@ CONFIG_SCHEMA = (
                 cv.ensure_list(sensor.sensor_schema()), cv.Length(max=6)
             ),
             cv.Optional(CONF_RELAY_SENSORS, default=[]): cv.All(
-                cv.ensure_list(binary_sensor.binary_sensor_schema()), cv.Length(max=4)
+                cv.ensure_list(binary_sensor.binary_sensor_schema()),
+                cv.Length(max=4),
             ),
         }
     )
