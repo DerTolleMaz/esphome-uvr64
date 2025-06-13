@@ -8,7 +8,9 @@ external_components:
       type: local
       path: ./components
     components: [uvr64_dlbus]
-
+  - source:
+      type: git
+      url: https://github.com/DerTolleMaz/esphome-uvr64
 logger:
 
 binary_sensor:
