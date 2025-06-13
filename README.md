@@ -19,11 +19,13 @@ pip install -r requirements.txt
 ## Verwendung
 
 ```yaml
+
 external_components:
   - source:
-      type: local
-      path: ./components
+      type: git
+      url: https://github.com/DerTolleMaz/esphome-uvr64
     components: [uvr64_dlbus]
+    refresh: always
 
 sensor:
   - platform: uvr64_dlbus
