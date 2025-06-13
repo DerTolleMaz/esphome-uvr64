@@ -1,17 +1,21 @@
 esphome:
   name: uvr64_dlbus
-
 esp8266:
   board: d1_mini
 
 external_components:
   - source:
-      type: git
-      url: https://github.com/DerTolleMaz/esphome-uvr64
+      type: local
+      path: ./components
     components: [uvr64_dlbus]
-    refresh: always
 
 logger:
+
+binary_sensor:
+  - platform: template
+    name: "dummy"
+    lambda: |-
+      return false;
 
 sensor:
   - platform: uvr64_dlbus
