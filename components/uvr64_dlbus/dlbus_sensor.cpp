@@ -7,7 +7,7 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-void DLBusSensor::setup() {Add commentMore actions
+void DLBusSensor::setup() {
   pinMode(pin_, INPUT);
   last_edge_ = micros();
   attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
