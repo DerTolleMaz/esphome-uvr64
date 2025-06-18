@@ -1,4 +1,5 @@
-// MIT License - see LICENSE file in the project root for full details.
+@@ -1,126 +1,140 @@
+// MIT License - see LICENSE file in the project root for full details.More actions
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
@@ -56,7 +57,7 @@ void DLBusSensor::parse_frame_() {
 
   uint32_t sum = 0;
   for (int i = 0; i < bit_index_; i++) sum += timings_[i];
-  uint32_t avg_duration = sum / bit_index_;More actions
+  uint32_t avg_duration = sum / bit_index_;
 
   ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
 
