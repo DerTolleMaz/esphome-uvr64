@@ -7,48 +7,7 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-void DLBusSensor::setup() {
-  pinMode(pin_, INPUT);
-  last_edge_ = micros();
-  attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
-}
-
-void DLBusSensor::update() {
-  if (frame_ready_) {
-    ESP_LOGD(TAG, "DLBus frame received, decoding...");
-    parse_frame_();
-    bit_index_ = 0;
-    last_edge_ = micros();
-    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-    frame_ready_ = false;
-  }
-}
-
-void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
-  if (index >= 0 && index < 6)
-    temp_sensors_[index] = sensor;
-}
-
-void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
-  if (index >= 0 && index < 4)
-    relay_sensors_[index] = sensor;
-}
-
-void IRAM_ATTR DLBusSensor::isr(void *arg) {
-  auto *self = static_cast<DLBusSensor *>(arg);
-  unsigned long now = micros();
-  uint32_t duration = now - self->last_edge_;
-  self->last_edge_ = now;
-  if (self->bit_index_ < MAX_BITS) {
-    self->timings_[self->bit_index_++] = duration;
-  } else {
-    self->frame_ready_ = true;
-    detachInterrupt(digitalPinToInterrupt(self->pin_));
-  }
-}
-
-void DLBusSensor::parse_frame_() {
+void DLBusSensor::parse_frame() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
@@ -92,6 +51,13 @@ void DLBusSensor::parse_frame_() {
     ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
+  // Prüfsumme berechnen (XOR über alle Bytes außer letztem)
+  uint8_t checksum = 0;
+  for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
+  if (checksum != raw_bytes[15]) {
+    ESP_LOGW(TAG, "Checksum mismatch: expected 0x%02X, got 0x%02X", raw_bytes[15], checksum);
+  }
+
   int sync_offset = -1;
   for (int i = 0; i < 14; i++) {
     if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
@@ -120,9 +86,15 @@ void DLBusSensor::parse_frame_() {
   }
 
   for (int i = 0; i < 6; i++) {
-    int16_t raw = (raw_bytes[sync_offset + 2 * i] << 8) | raw_bytes[sync_offset + 2 * i + 1];
+    uint8_t low = raw_bytes[sync_offset + 2 * i];
+    uint8_t high = raw_bytes[sync_offset + 2 * i + 1];
+    int16_t raw = (high << 8) | low;
+    if (raw == 0x7FFF || raw == 0x8000 || raw < -1000 || raw > 2000) {
+      ESP_LOGW(TAG, "Temp[%d] raw value 0x%04X out of range or invalid", i, raw & 0xFFFF);
+      continue;
+    }
     float temp = raw / 10.0f;
-    ESP_LOGI(TAG, "Temp[%d] = %.1f °C", i, temp);
+    ESP_LOGI(TAG, "Temp[%d] = %.1f °C (raw: 0x%04X)", i, temp, raw & 0xFFFF);
     if (temp_sensors_[i] != nullptr)
       temp_sensors_[i]->publish_state(temp);
   }
