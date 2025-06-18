@@ -23,8 +23,16 @@ void DLBusSensor::setup() {
 }
 
 void DLBusSensor::update() {
-  // Update-Logik hier
-  ESP_LOGD(TAG, "DLBusSensor update() wurde aufgerufen");
+  ESP_LOGD(TAG, "DLBusSensor update() called, frame_ready=%d, bit_index=%d", frame_ready_, bit_index_);
+
+  if (frame_ready_) {
+    ESP_LOGD(TAG, "DLBus frame received, decoding...");
+    parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+    frame_ready_ = false;
+  }
 }
 
 void DLBusSensor::parse_frame_() {
