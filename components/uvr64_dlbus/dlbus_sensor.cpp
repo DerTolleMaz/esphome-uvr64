@@ -16,7 +16,7 @@ class DLBusSensorWithAPI : public DLBusSensor, public api::CustomAPIDevice {
  protected:
   bool byte_order_little_ = true;  // default to little endian
 
-  void parse_frame_() override {
+  void parse_frame() {
     if (bit_index_ < 80) {
       ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
       return;
