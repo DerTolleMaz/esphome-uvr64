@@ -76,26 +76,21 @@ void DLBusSensor::parse_frame_() {
   bool bits[128];
   int bit_count = 0;
 
+  
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
     uint32_t total = t1 + t2;
-
+  
     if (total < min_total || total > max_total) {
-      ESP_LOGV(TAG, "Invalid timing total: t1=%u t2=%u (sum=%u)", t1, t2, total);
+      ESP_LOGV(TAG, "Invalid total duration at %d: t1=%u t2=%u total=%u", i, t1, t2, total);
       continue;
     }
-
-    float ratio = (t1 > t2) ? (float)t1 / t2 : (float)t2 / t1;
-    if (ratio < 1.05f) {
-      ESP_LOGV(TAG, "Ignored edge pair %d: t1=%u t2=%u (ratio=%.2f)", i, t1, t2, ratio);
-      continue;
-    }
-
-    ESP_LOGV(TAG, "Bit %d decoded from t1=%u t2=%u → %d", bit_count, t1, t2, bit);
-    bool bit = (t1 < t2);  // kurz-lang = 1, lang-kurz = 0
+  
+    // Immer fest interpretieren: t1 < t2 → 1, sonst 0
+    bool bit = (t1 < t2);
     bits[bit_count++] = bit;
-
+  
     if (bit_count >= 128) break;
   }
 
