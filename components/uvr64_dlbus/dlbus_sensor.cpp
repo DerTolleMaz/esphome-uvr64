@@ -100,8 +100,22 @@ void DLBusSensor::parse_frame_() {
       break;
     }
   }
-  if (sync_offset == -1 || sync_offset + 11 >= 16) {
-    ESP_LOGW(TAG, "SYNC not found or not enough data after sync");
+  if (sync_offset == -1) {
+    for (int i = 0; i < 14; i++) {
+      if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
+        sync_offset = i;
+        ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
+        break;
+      }
+    }
+  }
+  if (sync_offset == -1) {
+    sync_offset = 0;
+    ESP_LOGW(TAG, "No known sync found – falling back to offset 0");
+  }
+
+  if (sync_offset + 13 >= 16) {
+    ESP_LOGW(TAG, "Not enough data after sync offset %d", sync_offset);
     return;
   }
 
