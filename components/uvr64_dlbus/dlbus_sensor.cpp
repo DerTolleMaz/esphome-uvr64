@@ -64,43 +64,43 @@ void DLBusSensor::parse_frame_() {
 
   ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
 
-  if (timing_len < 2) {
-    ESP_LOGW(TAG, "Too few edge timings for decoding");
-    return;
-  }
+ std::vector<bool> bits;
+  bits.reserve(64);
 
-  // Optional: Logge die ersten Timing-Werte
+  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
   ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
   for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
     ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
   }
 
-  // --- Pulsweitenbasierte Bit-Dekodierung ---
-  std::vector<bool> bits;
-  int zero_count = 0, one_count = 0, skip_count = 0;
-
   for (size_t i = 0; i + 1 < timing_len; i += 2) {
     uint32_t t1 = this->timings_[i];
     uint32_t t2 = this->timings_[i + 1];
 
-    if (t1 < 20 && t2 > 40) {
-      bits.push_back(false);  // 0
-      zero_count++;
-    } else if (t1 > 40 && t2 < 20) {
-      bits.push_back(true);   // 1
-      one_count++;
-    } else {
-      skip_count++;
+    // harter Abbruch bei offensichtlicher Trennung
+    if (t1 > 3000 || t2 > 3000) {
+      ESP_LOGI(TAG, "Aborting decode: framing break at i=%zu (t1=%u µs, t2=%u µs)", i, t1, t2);
+      break;
+    }
+
+    uint32_t total = t1 + t2;
+    if (total < 120 || total > 220) {
       ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
       continue;
     }
 
-    ESP_LOGV(TAG, "Bit Count %zu (t1=%u, t2=%u): %d", bits.size(), t1, t2, bits.back());
+    // Manchester decoding: transition in middle = valid bit
+    if (t1 < t2) {
+      bits.push_back(1);  // 0->1
+    } else {
+      bits.push_back(0);  // 1->0
+    }
+
+    ESP_LOGV(TAG, "Bit Count %zu", bits.size());
   }
 
-  ESP_LOGI(TAG, "Decoded %zu bits: %dx 0, %dx 1, %dx skipped", bits.size(), zero_count, one_count, skip_count);
-
-  if (bits.size() < 64) {
+  ESP_LOGI(TAG, "Decoded bit count: %zu", bits.size());
+  if (bits.size() < 32) {
     ESP_LOGW(TAG, "Decoded too few bits: %zu", bits.size());
     return;
   }
