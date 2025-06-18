@@ -68,10 +68,10 @@ void DLBusSensor::parse_frame_() {
   bits.reserve(64);
 
   ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
-  ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
-  for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
-    ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
-  }
+  //ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
+  //for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
+  //  ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
+  //}
 
   for (size_t i = 0; i + 1 < timing_len; i += 2) {
     uint32_t t1 = this->timings_[i];
