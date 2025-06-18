@@ -42,7 +42,7 @@ void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
     temp_sensors_[index] = sensor;
 }
 
-void DLBusSensor::parse_frame_() {
+void DLBusSensor::parse_frame_2() {
   ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
   for (int i = 0; i < bit_index_; i++) {
     ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
@@ -99,7 +99,7 @@ void DLBusSensor::parse_frame_() {
     }
   }
 }
-void DLBusSensor::parse_frame_2() {
+void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
