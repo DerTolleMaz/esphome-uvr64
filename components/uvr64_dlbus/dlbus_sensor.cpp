@@ -7,6 +7,16 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
+void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
+  if (index >= 0 && index < 6)
+    temp_sensors_[index] = sensor;
+}
+
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4)
+    relay_sensors_[index] = sensor;
+}
+
 void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
