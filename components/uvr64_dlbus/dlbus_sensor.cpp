@@ -71,25 +71,25 @@ void DLBusSensor::parse_frame_() {
   const uint32_t min_total = avg_duration * 7 / 10;
   const uint32_t max_total = avg_duration * 13 / 10;
   
-  bool bits[128];
-  int bit_count = 0;
-  
-  for (int i = 0; i < bit_index_ - 1; i += 2) {
-    uint32_t t1 = timings_[i];
-    uint32_t t2 = timings_[i + 1];
-    uint32_t total = t1 + t2;
-  
-    if (total < min_total || total > max_total) {
-      ESP_LOGV(TAG, "Invalid total duration at %d: t1=%u t2=%u total=%u", i, t1, t2, total);
-      continue;
-    }
-  
-    // DL-Bus: lang-kurz = 1, kurz-lang = 0
-    bool bit = (t1 > t2);
-    bits[bit_count++] = bit;
-  
-    if (bit_count >= 128) break;
+bool bits[128];
+int bit_count = 0;
+
+for (int i = 0; i + 1 < bit_index_; i += 2) {
+  uint32_t t1 = timings_[i];
+  uint32_t t2 = timings_[i + 1];
+
+  // Nur komplett unplausible Bitzeiten filtern
+  uint32_t total = t1 + t2;
+  if (total < 30 || total > 200) {
+    ESP_LOGV(TAG, "Timing out of range: %u + %u = %u", t1, t2, total);
+    continue;
   }
+
+  // Manchester-Festannahme: lang-kurz = 1
+  bool bit = (t1 > t2);
+  bits[bit_count++] = bit;
+  if (bit_count >= 128) break;
+}
 
   if (bit_count < 64) {
     ESP_LOGW(TAG, "Decoded too few bits: %d", bit_count);
