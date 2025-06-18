@@ -74,17 +74,26 @@ void DLBusSensor::parse_frame_() {
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
 
+  const uint32_t min_total = avg_duration * 8 / 10;  // 80%
+  const uint32_t max_total = avg_duration * 12 / 10; // 120%
+
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
-    bool bit = false;
+    uint32_t total = t1 + t2;
 
-    if (abs((int)t1 - (int)t2) < avg_duration / 4) {
-      bit = false; // Manchester: 01 = 0
-    } else if (abs((int)t1 - (int)t2) > avg_duration / 2) {
-      bit = true;  // Manchester: 10 = 1
+    if (total < min_total || total > max_total) {
+      ESP_LOGW(TAG, "Bit timing total out of range: t1=%u t2=%u sum=%u", t1, t2, total);
+      continue;
+    }
+
+    bool bit;
+    if (t1 > t2 * 1.5) {
+      bit = 0;  // lang-kurz → 0
+    } else if (t2 > t1 * 1.5) {
+      bit = 1;  // kurz-lang → 1
     } else {
-      ESP_LOGV(TAG, "Unclear bit timing at %d: t1=%u t2=%u", i, t1, t2);
+      ESP_LOGV(TAG, "Unclear Manchester bit at %d: t1=%u t2=%u", i, t1, t2);
       continue;
     }
 
