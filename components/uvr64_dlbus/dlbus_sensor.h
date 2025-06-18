@@ -13,7 +13,7 @@ class DLBusSensor : public Component {
   explicit DLBusSensor(uint8_t pin) : pin_(pin) {}
   void setup() override;
   void loop() override;
-
+  void update() override;
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
