@@ -12,13 +12,13 @@ static const char *const TAG = "uvr64_dlbus";
 class DLBusSensorWithAPI : public DLBusSensor, public api::CustomAPIDevice {
  public:
   void set_byte_order_little(bool little) { this->byte_order_little_ = little; }
-  void parse_frame();
+  void parse_frame_() override;
 
  protected:
   bool byte_order_little_ = true;  // default to little endian
 };
 
-void DLBusSensorWithAPI::parse_frame() {
+void DLBusSensorWithAPI::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
