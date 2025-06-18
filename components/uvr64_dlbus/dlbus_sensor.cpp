@@ -26,14 +26,14 @@ void DLBusSensor::update() {
 }
 
 void DLBusSensor::loop() {
-  if (frame_ready_) {
-    ESP_LOGD("uvr64_dlbus", "DLBus frame received, decoding...");
-    parse_frame_();
-    bit_index_ = 0;
-    last_edge_ = micros();
-    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-    frame_ready_ = false;
-  }
+ // if (frame_ready_) {
+ //   ESP_LOGD("uvr64_dlbus", "DLBus frame received, decoding...");
+ //   parse_frame_();
+ //   bit_index_ = 0;
+ //   last_edge_ = micros();
+ //   attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+ //   frame_ready_ = false;
+ // }
 }
 
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
