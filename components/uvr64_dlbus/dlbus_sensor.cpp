@@ -60,7 +60,7 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  constexpr size_t timing_len = DLBUS_TIMING_BUFFER_SIZE;  // normalerweise 128
+  constexpr size_t timing_len = 128;  // normalerweise 128
 
   ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
   //for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
