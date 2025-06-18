@@ -1,4 +1,4 @@
-// MIT License - see LICENSE file in the project root for full details.
+// MIT License - see LICENSE file in the project root for full details.More actions
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
@@ -15,15 +15,14 @@ void DLBusSensor::setup() {
 }
 
 void DLBusSensor::update() {
-  if (!frame_ready_)
-    return;
-
-  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
-  parse_frame_();
-  bit_index_ = 0;
-  last_edge_ = micros();
-  attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-  frame_ready_ = false;
+  if (frame_ready_) {
+    ESP_LOGD(TAG, "DLBus frame received, decoding...");
+    parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+    frame_ready_ = false;
+  }
 }
 
 void DLBusSensor::loop() {
@@ -42,90 +41,58 @@ void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
     temp_sensors_[index] = sensor;
 }
 
-void DLBusSensor::parse_frame_2() {
-  ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
-  for (int i = 0; i < bit_index_; i++) {
-    ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
-  }
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4)
+    relay_sensors_[index] = sensor;
+}
 
-  // Toleranter Manchester-Decoder (t1 > t2 = 1)
-  bool bits[128] = {false};
-  int bit_count = 0;
+void IRAM_ATTR DLBusSensor::isr(void *arg) {
+  auto *self = static_cast<DLBusSensor *>(arg);
+  unsigned long now = micros();
+  uint32_t duration = now - self->last_edge_;
+  self->last_edge_ = now;
 
-  for (int i = 0; i + 1 < bit_index_ && bit_count < 128; i += 2) {
-    uint32_t t1 = timings_[i];
-    uint32_t t2 = timings_[i + 1];
-    bits[bit_count++] = (t1 > t2);  // Annahme: lang-kurz = 1
-  }
+  // NEU: Nur gültige Zeitdifferenzen erfassen
+  if (duration < 30 || duration > 300) return;
 
-  ESP_LOGI(TAG, "Decoded %d bits from %d edges", bit_count, bit_index_);
-
-  if (bit_count < 8) {
-    ESP_LOGW(TAG, "Too few bits to decode anything useful.");
-    return;
-  }
-
-  // Debug-Ausgabe der Bitfolge (max. 64 Zeichen)
-  std::string bitstring;
-  for (int i = 0; i < bit_count && i < 64; i++) {
-    bitstring += bits[i] ? '1' : '0';
-  }
-  ESP_LOGI(TAG, "Bitstream (up to 64): %s", bitstring.c_str());
-
-  // Bytes aus Bits (max. was geht)
-  uint8_t raw_bytes[16] = {0};
-  int max_bytes = bit_count / 8;
-  if (max_bytes > 16) max_bytes = 16;
-
-  for (int i = 0; i < max_bytes; i++) {
-    for (int b = 0; b < 8; b++) {
-      raw_bytes[i] <<= 1;
-      raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
-    }
-  }
-
-  ESP_LOGI(TAG, "Decoded raw bytes:");
-  for (int i = 0; i < max_bytes; i++) {
-    ESP_LOGI(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
-  }
-
-  // Sync-Check (optional)
-  for (int i = 0; i < max_bytes - 1; i++) {
-    if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
-      ESP_LOGI(TAG, "Found SYNC pattern 0xFF 0xFF at byte offset %d", i);
-    }
-    if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
-      ESP_LOGI(TAG, "Found SYNC pattern 0x0B 0x88 at byte offset %d", i);
-    }
+  if (self->bit_index_ < MAX_BITS) {
+    self->timings_[self->bit_index_++] = duration;
+  } else {
+    self->frame_ready_ = true;
+    detachInterrupt(digitalPinToInterrupt(self->pin_));
   }
 }
+
 void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
   }
 
-  // Logging aller Timings zur Analyse
-  ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
-  //for (int i = 0; i < bit_index_; i++) {
-  //  ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
- // }
+  uint32_t sum = 0;
+  for (int i = 0; i < bit_index_; i++) sum += timings_[i];
+  uint32_t avg_duration = sum / bit_index_;
+  const uint32_t min_total = avg_duration * 7 / 10;
+  const uint32_t max_total = avg_duration * 13 / 10;
 
-  // Manchester-Dekodierung: feste Toleranz, keine ratio-Prüfung
   bool bits[128];
   int bit_count = 0;
 
+  //ESP_LOGI(TAG, "First timing pair: t1=%u t2=%u", timings_[0], timings_[1]);
+    ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
+  for (int i = 0; i < bit_index_; i++) {
+    ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
+  }
   for (int i = 0; i + 1 < bit_index_; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
 
-    if (t1 < 30 || t2 < 30 || (t1 + t2) > 300) {
-      ESP_LOGV(TAG, "Skipping implausible timings at %d: t1=%u t2=%u", i, t1, t2);
+    if (t1 < 20 || t2 < 20 || t1 + t2 > 300) {
+      ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
       continue;
     }
 
-    // Annahme: lang-kurz = 1, kurz-lang = 0
-    bool bit = (t1 > t2);
+    bool bit = (t1 > t2);  // Annahme: lang-kurz = 1
     bits[bit_count++] = bit;
 
     if (bit_count >= 128) break;
@@ -136,7 +103,6 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  // Bits zu Bytes umwandeln
   uint8_t raw_bytes[16] = {0};
   for (int i = 0; i < 16 && (i * 8 + 7) < bit_count; i++) {
     for (int b = 0; b < 8; b++) {
@@ -150,7 +116,6 @@ void DLBusSensor::parse_frame_() {
     ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
-  // Prüfsumme (XOR) prüfen
   uint8_t checksum = 0;
   for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
   if (checksum != raw_bytes[15]) {
@@ -158,7 +123,6 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  // Synchronisation
   int sync_offset = -1;
   for (int i = 0; i < 14; i++) {
     if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
@@ -182,7 +146,6 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  // Temperaturen dekodieren
   for (int i = 0; i < 6; i++) {
     uint8_t low = raw_bytes[sync_offset + 2 * i];
     uint8_t high = raw_bytes[sync_offset + 2 * i + 1];
@@ -197,10 +160,9 @@ void DLBusSensor::parse_frame_() {
       temp_sensors_[i]->publish_state(temp);
   }
 
-  // Relaisstatus dekodieren
   uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
-    bool state = (relays >> i) & 0x01;
+    bool state = (relays >> i) & 0x01;More actions
     ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
     if (relay_sensors_[i] != nullptr)
       relay_sensors_[i]->publish_state(state);
