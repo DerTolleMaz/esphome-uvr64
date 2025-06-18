@@ -7,6 +7,24 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
+void DLBusSensor::setup() {
+  pinMode(pin_, INPUT);
+  last_edge_ = micros();
+  attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
+}
+
+void DLBusSensor::loop() {
+  if (frame_ready_) {
+    ESP_LOGD(TAG, "DLBus frame received, decoding...");
+    parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+    frame_ready_ = false;
+  }
+}
+
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
   if (index >= 0 && index < 6)
     temp_sensors_[index] = sensor;
@@ -17,21 +35,16 @@ void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *senso
     relay_sensors_[index] = sensor;
 }
 
-void DLBusSensor::setup() {
-  // Setup-Logik hier
-  ESP_LOGI(TAG, "DLBusSensor setup() wurde aufgerufen");
-}
-
-void DLBusSensor::update() {
-  ESP_LOGD(TAG, "DLBusSensor update() called, frame_ready=%d, bit_index=%d", frame_ready_, bit_index_);
-
-  if (frame_ready_) {
-    ESP_LOGD(TAG, "DLBus frame received, decoding...");
-    parse_frame_();
-    bit_index_ = 0;
-    last_edge_ = micros();
-    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-    frame_ready_ = false;
+void IRAM_ATTR DLBusSensor::isr(void *arg) {
+  auto *self = static_cast<DLBusSensor *>(arg);
+  unsigned long now = micros();
+  uint32_t duration = now - self->last_edge_;
+  self->last_edge_ = now;
+  if (self->bit_index_ < MAX_BITS) {
+    self->timings_[self->bit_index_++] = duration;
+  } else {
+    self->frame_ready_ = true;
+    detachInterrupt(digitalPinToInterrupt(self->pin_));
   }
 }
 
