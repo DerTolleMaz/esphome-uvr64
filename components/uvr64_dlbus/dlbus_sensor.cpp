@@ -60,70 +60,66 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  constexpr size_t timing_len = 128;
+  constexpr size_t timing_len = DLBUS_TIMING_BUFFER_SIZE;  // normalerweise 128
 
-  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
-
- std::vector<bool> bits;
-  bits.reserve(64);
-
-  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
-  //ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
+  ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
   //for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
   //  ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
-  //}
+ // }
+
+  std::vector<bool> bits;
+  size_t decoded = 0;
 
   for (size_t i = 0; i + 1 < timing_len; i += 2) {
     uint32_t t1 = this->timings_[i];
     uint32_t t2 = this->timings_[i + 1];
 
-    // harter Abbruch bei offensichtlicher Trennung
-    if (t1 > 3000 || t2 > 3000) {
-      ESP_LOGI(TAG, "Aborting decode: framing break at i=%zu (t1=%u µs, t2=%u µs)", i, t1, t2);
-      break;
-    }
-
-    uint32_t total = t1 + t2;
-    if (total < 120 || total > 220) {
+    // Manchester-Zerlegung: t1 + t2 = Bitlänge
+    if (t1 < 4 || t2 < 4 || (t1 + t2) < 60 || (t1 + t2) > 280) {
       ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
       continue;
     }
 
-    // Manchester decoding: transition in middle = valid bit
-    if (t1 < t2) {
-      bits.push_back(1);  // 0->1
-    } else {
-      bits.push_back(0);  // 1->0
+    if (t2 > 5000) {
+      ESP_LOGI(TAG, "Aborting decode: framing break at i=%zu (t1=%u µs, t2=%u µs)", i, t1, t2);
+      break;
     }
 
-    ESP_LOGV(TAG, "Bit Count %zu", bits.size());
+    bool bit;
+    if (t1 < t2)
+      bit = false;  // 01 = 0
+    else
+      bit = true;   // 10 = 1
+
+    bits.push_back(bit);
+    decoded++;
+    ESP_LOGV(TAG, "Bit Count %zu", decoded);
   }
 
-  ESP_LOGI(TAG, "Decoded bit count: %zu", bits.size());
-  if (bits.size() < 32) {
-    ESP_LOGW(TAG, "Decoded too few bits: %zu", bits.size());
+  ESP_LOGI(TAG, "Decoded bit count: %zu", decoded);
+  if (decoded < 64) {
+    ESP_LOGW(TAG, "Decoded too few bits: %zu", decoded);
     return;
   }
 
-  // --- Bits → Bytes ---
-  uint8_t raw_bytes[16] = {0};
-  int max_bytes = std::min((int)bits.size() / 8, 16);
+  // Bitfolge als String anzeigen
+  std::string bitstr;
+  for (bool bit : bits) bitstr += bit ? "1" : "0";
+  ESP_LOGI(TAG, "Bitstream: %s", bitstr.c_str());
 
-  for (int i = 0; i < max_bytes; i++) {
+  // Versuche, bis zu 12 Byte daraus zu machen (max. 96 Bit)
+  size_t byte_len = std::min(bits.size() / 8, size_t(12));
+  std::vector<uint8_t> raw_bytes(byte_len, 0);
+  for (size_t i = 0; i < byte_len; i++) {
     for (int b = 0; b < 8; b++) {
-      raw_bytes[i] <<= 1;
-      raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
+      if (bits[i * 8 + b])
+        raw_bytes[i] |= (1 << (7 - b));
     }
   }
 
-  // Hex-Dump
-  char hexbuf[3 * 16 + 1] = {0};
-  for (int i = 0; i < max_bytes; i++) {
-    sprintf(hexbuf + i * 3, "%02X ", raw_bytes[i]);
-  }
-  ESP_LOGI(TAG, "Raw Bytes: %s", hexbuf);
+  ESP_LOGI(TAG, "DLBus Raw: %s", format_hex_pretty(raw_bytes).c_str());
 
-  // TODO: DL-Bus-Inhalt auswerten
+  // → hier könntest du die raw_bytes an die eigentliche Frame-Decoder-Logik übergeben
 }
 
 
