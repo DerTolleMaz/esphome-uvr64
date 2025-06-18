@@ -1,5 +1,4 @@
-
-// MIT License - see LICENSE file in the project root for full details.More actions
+// MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
@@ -101,8 +100,6 @@ void DLBusSensor::parse_frame_() {
       break;
     }
   }
-  if (sync_offset == -1 || sync_offset + 11 >= 16) {
-    ESP_LOGW(TAG, "SYNC not found or not enough data after sync");
   if (sync_offset == -1) {
     for (int i = 0; i < 14; i++) {
       if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
