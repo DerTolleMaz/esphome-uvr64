@@ -65,6 +65,65 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
+  ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
+  for (int i = 0; i < bit_index_; i++) {
+    ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
+  }
+
+  // Ultra-toleranter Manchester-Debug-Decoder
+  bool bits[64];  // 64 Bits bei 128 Flanken
+  int bit_count = 0;
+
+  for (int i = 0; i + 1 < bit_index_ && bit_count < 64; i += 2) {
+    uint32_t t1 = timings_[i];
+    uint32_t t2 = timings_[i + 1];
+
+    // KEINE Filterung → alles verwerten
+    bool bit = (t1 > t2);  // lang-kurz = 1, kurz-lang = 0
+    bits[bit_count++] = bit;
+  }
+
+  if (bit_count < 64) {
+    ESP_LOGW(TAG, "Decoded only %d bits", bit_count);
+    return;
+  }
+
+  // Bitfolge als String loggen
+  std::string bitstring;
+  for (int i = 0; i < bit_count; i++) {
+    bitstring += bits[i] ? '1' : '0';
+  }
+  ESP_LOGI(TAG, "Bitstream: %s", bitstring.c_str());
+
+  // Bits zu Bytes umwandeln
+  uint8_t raw_bytes[16] = {0};
+  for (int i = 0; i < 16; i++) {
+    for (int b = 0; b < 8; b++) {
+      raw_bytes[i] <<= 1;
+      raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
+    }
+  }
+
+  // Rohbytes loggen – unabhängig von Gültigkeit
+  ESP_LOGI(TAG, "Decoded raw bytes:");
+  for (int i = 0; i < 16; i++) {
+    ESP_LOGI(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
+  }
+
+  // OPTIONAL: Sync-Pattern anzeigen
+  for (int i = 0; i < 14; i++) {
+    if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
+      ESP_LOGI(TAG, "Found SYNC pattern 0xFF 0xFF at byte offset %d", i);
+    }
+    if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
+      ESP_LOGI(TAG, "Found alternative SYNC 0x0B 0x88 at byte offset %d", i);
+    }
+  }
+
+  // Noch keine Sensorzuweisung – Debug only!
+}
+
+void DLBusSensor::parse_frame_2() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
