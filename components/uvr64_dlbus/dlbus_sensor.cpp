@@ -1,4 +1,4 @@
-// MIT License - see LICENSE file in the project root for full details.More actions
+// MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
@@ -51,10 +51,6 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
   unsigned long now = micros();
   uint32_t duration = now - self->last_edge_;
   self->last_edge_ = now;
-
-  // NEU: Nur gültige Zeitdifferenzen erfassen
-  if (duration < 30 || duration > 300) return;
-
   if (self->bit_index_ < MAX_BITS) {
     self->timings_[self->bit_index_++] = duration;
   } else {
@@ -74,7 +70,7 @@ void DLBusSensor::parse_frame_() {
   uint32_t avg_duration = sum / bit_index_;
   const uint32_t min_total = avg_duration * 7 / 10;
   const uint32_t max_total = avg_duration * 13 / 10;
-
+  
   bool bits[128];
   int bit_count = 0;
 
@@ -86,15 +82,15 @@ void DLBusSensor::parse_frame_() {
   for (int i = 0; i + 1 < bit_index_; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
-
+  
     if (t1 < 20 || t2 < 20 || t1 + t2 > 300) {
       ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
       continue;
     }
-
+  
     bool bit = (t1 > t2);  // Annahme: lang-kurz = 1
     bits[bit_count++] = bit;
-
+  
     if (bit_count >= 128) break;
   }
 
@@ -162,7 +158,7 @@ void DLBusSensor::parse_frame_() {
 
   uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
-    bool state = (relays >> i) & 0x01;More actions
+    bool state = (relays >> i) & 0x01;
     ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
     if (relay_sensors_[i] != nullptr)
       relay_sensors_[i]->publish_state(state);
