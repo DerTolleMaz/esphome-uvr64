@@ -90,7 +90,7 @@ void DLBusSensor::parse_frame_() {
   
     bool bit = (t1 > t2);  // Annahme: lang-kurz = 1
     bits[bit_count++] = bit;
-  
+    ESP_LOGV(TAG, "Bit Count %u", bit_count)
     if (bit_count >= 128) break;
   }
 
