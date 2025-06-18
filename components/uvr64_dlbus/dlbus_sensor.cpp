@@ -1,24 +1,13 @@
 // MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
-#include "esphome/core/application.h"
-#include "esphome/components/api/custom_api_device.h"
 
 namespace esphome {
 namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-class DLBusSensorWithAPI : public DLBusSensor, public api::CustomAPIDevice {
- public:
-  void set_byte_order_little(bool little) { this->byte_order_little_ = little; }
-  void parse_frame() override;
-
- protected:
-  bool byte_order_little_ = true;  // default to little endian
-};
-
-void DLBusSensorWithAPI::parse_frame() {
+void DLBusSensor::parse_frame() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
@@ -90,12 +79,7 @@ void DLBusSensorWithAPI::parse_frame() {
   }
 
   for (int i = 0; i < 6; i++) {
-    int16_t raw;
-    if (byte_order_little_) {
-      raw = (raw_bytes[sync_offset + 2 * i + 1] << 8) | raw_bytes[sync_offset + 2 * i];
-    } else {
-      raw = (raw_bytes[sync_offset + 2 * i] << 8) | raw_bytes[sync_offset + 2 * i + 1];
-    }
+    int16_t raw = (raw_bytes[sync_offset + 2 * i + 1] << 8) | raw_bytes[sync_offset + 2 * i];
     float temp = raw / 10.0f;
     ESP_LOGI(TAG, "Temp[%d] = %.1f °C (raw: 0x%04X)", i, temp, raw & 0xFFFF);
     if (temp_sensors_[i] != nullptr)
