@@ -61,21 +61,22 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 
 void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
-    ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
+    ESP_LOGW(TAG, "Frame too short: %d bits", bit_index_);
     return;
   }
 
+  // Schritt 1: Durchschnittliche Bitzeit berechnen
   uint32_t sum = 0;
   for (int i = 0; i < bit_index_; i++) sum += timings_[i];
   uint32_t avg_duration = sum / bit_index_;
+  uint32_t min_total = avg_duration * 8 / 10;
+  uint32_t max_total = avg_duration * 12 / 10;
 
   ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
 
-  uint8_t raw_bytes[16] = {0};
-  int byte_i = 0, bit_i = 0;
-
-  const uint32_t min_total = avg_duration * 8 / 10;  // 80%
-  const uint32_t max_total = avg_duration * 12 / 10; // 120%
+  // Schritt 2: Manchester-Dekodierung – Bitfolge extrahieren
+  bool bits[128];  // max. 64 echte Bits (aus 128 Flanken)
+  int bit_count = 0;
 
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
@@ -83,62 +84,63 @@ void DLBusSensor::parse_frame_() {
     uint32_t total = t1 + t2;
 
     if (total < min_total || total > max_total) {
-      ESP_LOGW(TAG, "Bit timing total out of range: t1=%u t2=%u sum=%u", t1, t2, total);
+      ESP_LOGV(TAG, "Timing outside valid range at %d: %u+%u", i, t1, t2);
       continue;
     }
 
-    bool bit;
-    if (t1 > t2 * 1.5) {
-      bit = 0;  // lang-kurz → 0
-    } else if (t2 > t1 * 1.5) {
-      bit = 1;  // kurz-lang → 1
+    if (t1 > t2 * 1.5f) {
+      bits[bit_count++] = 0;  // lang-kurz
+    } else if (t2 > t1 * 1.5f) {
+      bits[bit_count++] = 1;  // kurz-lang
     } else {
-      ESP_LOGV(TAG, "Unclear Manchester bit at %d: t1=%u t2=%u", i, t1, t2);
+      ESP_LOGV(TAG, "Unclear edge pair at %d: %u, %u", i, t1, t2);
       continue;
     }
 
-    raw_bytes[byte_i] <<= 1;
-    raw_bytes[byte_i] |= bit;
-    bit_i++;
-    if (bit_i == 8) {
-      bit_i = 0;
-      byte_i++;
-    }
-    if (byte_i >= 16) break;
+    if (bit_count >= 128) break;
   }
 
-  ESP_LOGD(TAG, "Decoded raw bytes:");
+  if (bit_count < 64) {
+    ESP_LOGW(TAG, "Decoded too few bits: %d", bit_count);
+    return;
+  }
+
+  // Schritt 3: Bits zu Bytes konvertieren
+  uint8_t raw_bytes[16] = {0};
+  for (int i = 0; i < 16 && i * 8 + 7 < bit_count; i++) {
+    for (int b = 0; b < 8; b++) {
+      raw_bytes[i] <<= 1;
+      raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
+    }
+  }
+
+  ESP_LOGD(TAG, "Raw bytes:");
   for (int i = 0; i < 16; i++) {
     ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
-  // Prüfsumme berechnen (XOR über alle Bytes außer letztem)
+  // Schritt 4: Prüfsumme prüfen
   uint8_t checksum = 0;
   for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
   if (checksum != raw_bytes[15]) {
     ESP_LOGW(TAG, "Checksum mismatch: expected 0x%02X, got 0x%02X", raw_bytes[15], checksum);
+    return;
   }
 
+  // Schritt 5: Sync finden
   int sync_offset = -1;
   for (int i = 0; i < 14; i++) {
     if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
       sync_offset = i + 2;
-      ESP_LOGD(TAG, "SYNC found at offset %d", i);
+      break;
+    } else if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
+      sync_offset = i;
       break;
     }
   }
   if (sync_offset == -1) {
-    for (int i = 0; i < 14; i++) {
-      if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
-        sync_offset = i;
-        ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
-        break;
-      }
-    }
-  }
-  if (sync_offset == -1) {
     sync_offset = 0;
-    ESP_LOGW(TAG, "No known sync found – falling back to offset 0");
+    ESP_LOGW(TAG, "No sync pattern found, defaulting to offset 0");
   }
 
   if (sync_offset + 13 >= 16) {
@@ -146,26 +148,23 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
+  // Schritt 6: Temperaturen verarbeiten
   for (int i = 0; i < 6; i++) {
-    uint8_t low = raw_bytes[sync_offset + 2 * i];
-    uint8_t high = raw_bytes[sync_offset + 2 * i + 1];
-    int16_t raw = (high << 8) | low;
-    if (raw == 0x7FFF || raw == 0x8000 || raw < -1000 || raw > 2000) {
-      ESP_LOGW(TAG, "Temp[%d] raw value 0x%04X out of range or invalid", i, raw & 0xFFFF);
-      continue;
-    }
+    uint8_t lo = raw_bytes[sync_offset + 2 * i];
+    uint8_t hi = raw_bytes[sync_offset + 2 * i + 1];
+    int16_t raw = (hi << 8) | lo;
+    if (raw == 0x7FFF || raw == 0x8000 || raw < -1000 || raw > 2000) continue;
     float temp = raw / 10.0f;
-    ESP_LOGI(TAG, "Temp[%d] = %.1f °C (raw: 0x%04X)", i, temp, raw & 0xFFFF);
-    if (temp_sensors_[i] != nullptr)
-      temp_sensors_[i]->publish_state(temp);
+    ESP_LOGI(TAG, "Temp[%d] = %.1f °C", i, temp);
+    if (temp_sensors_[i]) temp_sensors_[i]->publish_state(temp);
   }
 
+  // Schritt 7: Relaisstatus
   uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
     bool state = (relays >> i) & 0x01;
     ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
-    if (relay_sensors_[i] != nullptr)
-      relay_sensors_[i]->publish_state(state);
+    if (relay_sensors_[i]) relay_sensors_[i]->publish_state(state);
   }
 }
 
