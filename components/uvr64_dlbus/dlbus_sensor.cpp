@@ -7,14 +7,14 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-void DLBusSensor::setup() {
+void DLBusSensor::setup() {Add commentMore actions
   pinMode(pin_, INPUT);
   last_edge_ = micros();
   attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
   ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
 }
 
-void DLBusSensor::loop() {
+void DLBusSensor::update() {
   if (frame_ready_) {
     ESP_LOGD(TAG, "DLBus frame received, decoding...");
     parse_frame_();
