@@ -7,7 +7,7 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-void DLBusSensor::parse_frame() {
+void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
     return;
