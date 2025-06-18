@@ -75,10 +75,10 @@ void DLBusSensor::parse_frame_() {
   int bit_count = 0;
 
   //ESP_LOGI(TAG, "First timing pair: t1=%u t2=%u", timings_[0], timings_[1]);
-    ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
-  for (int i = 0; i < bit_index_; i++) {
-    ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
-  }
+  //  ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
+ // for (int i = 0; i < bit_index_; i++) {
+  //  ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
+  //}
   for (int i = 0; i + 1 < bit_index_; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
