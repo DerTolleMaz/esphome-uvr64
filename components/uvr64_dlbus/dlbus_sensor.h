@@ -11,9 +11,9 @@ namespace uvr64_dlbus {
 class DLBusSensor : public sensor::Sensor, public PollingComponent {
  public:
   DLBusSensor(uint8_t pin) : pin_(pin) {}
+  virtual ~DLBusSensor() = default;  
   void setup() override;
   void update() override;
-
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
