@@ -51,6 +51,10 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
   unsigned long now = micros();
   uint32_t duration = now - self->last_edge_;
   self->last_edge_ = now;
+
+  // NEU: Nur gültige Zeitdifferenzen erfassen
+  if (duration < 30 || duration > 300) return;
+
   if (self->bit_index_ < MAX_BITS) {
     self->timings_[self->bit_index_++] = duration;
   } else {
