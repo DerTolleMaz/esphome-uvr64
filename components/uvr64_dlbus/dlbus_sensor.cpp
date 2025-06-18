@@ -42,87 +42,63 @@ void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
     temp_sensors_[index] = sensor;
 }
 
-void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
-  if (index >= 0 && index < 4)
-    relay_sensors_[index] = sensor;
-}
-
-void IRAM_ATTR DLBusSensor::isr(void *arg) {
-  auto *self = static_cast<DLBusSensor *>(arg);
-  unsigned long now = micros();
-  uint32_t duration = now - self->last_edge_;
-  self->last_edge_ = now;
-
-  // NEU: Nur gültige Zeitdifferenzen erfassen
-  if (duration < 30 || duration > 300) return;
-
-  if (self->bit_index_ < MAX_BITS) {
-    self->timings_[self->bit_index_++] = duration;
-  } else {
-    self->frame_ready_ = true;
-    detachInterrupt(digitalPinToInterrupt(self->pin_));
-  }
-}
-
 void DLBusSensor::parse_frame_() {
   ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
   for (int i = 0; i < bit_index_; i++) {
     ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
   }
 
-  // Ultra-toleranter Manchester-Debug-Decoder
-  bool bits[64];  // 64 Bits bei 128 Flanken
+  // Toleranter Manchester-Decoder (t1 > t2 = 1)
+  bool bits[128] = {false};
   int bit_count = 0;
 
-  for (int i = 0; i + 1 < bit_index_ && bit_count < 64; i += 2) {
+  for (int i = 0; i + 1 < bit_index_ && bit_count < 128; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
-
-    // KEINE Filterung → alles verwerten
-    bool bit = (t1 > t2);  // lang-kurz = 1, kurz-lang = 0
-    bits[bit_count++] = bit;
+    bits[bit_count++] = (t1 > t2);  // Annahme: lang-kurz = 1
   }
 
-  if (bit_count < 64) {
-    ESP_LOGW(TAG, "Decoded only %d bits", bit_count);
+  ESP_LOGI(TAG, "Decoded %d bits from %d edges", bit_count, bit_index_);
+
+  if (bit_count < 8) {
+    ESP_LOGW(TAG, "Too few bits to decode anything useful.");
     return;
   }
 
-  // Bitfolge als String loggen
+  // Debug-Ausgabe der Bitfolge (max. 64 Zeichen)
   std::string bitstring;
-  for (int i = 0; i < bit_count; i++) {
+  for (int i = 0; i < bit_count && i < 64; i++) {
     bitstring += bits[i] ? '1' : '0';
   }
-  ESP_LOGI(TAG, "Bitstream: %s", bitstring.c_str());
+  ESP_LOGI(TAG, "Bitstream (up to 64): %s", bitstring.c_str());
 
-  // Bits zu Bytes umwandeln
+  // Bytes aus Bits (max. was geht)
   uint8_t raw_bytes[16] = {0};
-  for (int i = 0; i < 16; i++) {
+  int max_bytes = bit_count / 8;
+  if (max_bytes > 16) max_bytes = 16;
+
+  for (int i = 0; i < max_bytes; i++) {
     for (int b = 0; b < 8; b++) {
       raw_bytes[i] <<= 1;
       raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
     }
   }
 
-  // Rohbytes loggen – unabhängig von Gültigkeit
   ESP_LOGI(TAG, "Decoded raw bytes:");
-  for (int i = 0; i < 16; i++) {
+  for (int i = 0; i < max_bytes; i++) {
     ESP_LOGI(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
-  // OPTIONAL: Sync-Pattern anzeigen
-  for (int i = 0; i < 14; i++) {
+  // Sync-Check (optional)
+  for (int i = 0; i < max_bytes - 1; i++) {
     if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
       ESP_LOGI(TAG, "Found SYNC pattern 0xFF 0xFF at byte offset %d", i);
     }
     if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
-      ESP_LOGI(TAG, "Found alternative SYNC 0x0B 0x88 at byte offset %d", i);
+      ESP_LOGI(TAG, "Found SYNC pattern 0x0B 0x88 at byte offset %d", i);
     }
   }
-
-  // Noch keine Sensorzuweisung – Debug only!
 }
-
 void DLBusSensor::parse_frame_2() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
