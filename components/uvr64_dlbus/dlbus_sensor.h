@@ -8,7 +8,7 @@
 namespace esphome {
 namespace uvr64_dlbus {
 
-class DLBusSensor : public Component {
+class DLBusSensor : public sensor::Sensor, public PollingComponent {
  public:
   explicit DLBusSensor(uint8_t pin) : pin_(pin) {}
   void setup() override;
