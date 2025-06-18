@@ -60,109 +60,70 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  if (bit_index_ < 80) {
-    ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
+  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
+
+  if (this->timings_.size() < 2) {
+    ESP_LOGW(TAG, "Too few edge timings for decoding");
     return;
   }
 
-  uint32_t sum = 0;
-  for (int i = 0; i < bit_index_; i++) sum += timings_[i];
-  uint32_t avg_duration = sum / bit_index_;
-  const uint32_t min_total = avg_duration * 7 / 10;
-  const uint32_t max_total = avg_duration * 13 / 10;
-  
-  bool bits[128];
-  int bit_count = 0;
+  // Timing-Log (optional, zur Analyse)
+  ESP_LOGI(TAG, "Timing sequence (%zu edges):", this->timings_.size());
+  for (size_t i = 0; i < std::min(this->timings_.size(), size_t(33)); i++) {
+    ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
+  }
 
-  //ESP_LOGI(TAG, "First timing pair: t1=%u t2=%u", timings_[0], timings_[1]);
-  //  ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
- // for (int i = 0; i < bit_index_; i++) {
-  //  ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
-  //}
-  for (int i = 0; i + 1 < bit_index_; i += 2) {
-    uint32_t t1 = timings_[i];
-    uint32_t t2 = timings_[i + 1];
-  
-    if (t1 < 20 || t2 < 20 || t1 + t2 > 300) {
-      ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
+  // --- Pulsweitenbasierte Bit-Dekodierung ---
+  std::vector<bool> bits;
+  int zero_count = 0, one_count = 0, skip_count = 0;
+
+  for (size_t i = 0; i + 1 < this->timings_.size(); i += 2) {
+    uint32_t t1 = this->timings_[i];
+    uint32_t t2 = this->timings_[i + 1];
+
+    // Robust gegen Störungen: Grenzwerte empirisch gewählt
+    if (t1 < 20 && t2 > 40) {
+      bits.push_back(false);  // 0
+      zero_count++;
+    } else if (t1 > 40 && t2 < 20) {
+      bits.push_back(true);   // 1
+      one_count++;
+    } else {
+      skip_count++;
+      ESP_LOGV(TAG, "Unclear pulse widths: t1=%u, t2=%u (skipped)", t1, t2);
       continue;
     }
-  
-    bool bit = (t1 > t2);  // Annahme: lang-kurz = 1
-    bits[bit_count++] = bit;
-    ESP_LOGV(TAG, "Bit Count %u", bit_count);
-    if (bit_count >= 128) break;
+
+    ESP_LOGV(TAG, "Bit Count %zu (t1=%u, t2=%u): %d", bits.size(), t1, t2, bits.back());
   }
 
-  if (bit_count < 64) {
-    ESP_LOGW(TAG, "Decoded too few bits: %d", bit_count);
+  ESP_LOGI(TAG, "Decoded %zu bits: %dx 0, %dx 1, %dx skipped", bits.size(), zero_count, one_count, skip_count);
+
+  if (bits.size() < 64) {
+    ESP_LOGW(TAG, "Decoded too few bits: %zu", bits.size());
     return;
   }
 
+  // --- Bits → Bytes wandeln ---
   uint8_t raw_bytes[16] = {0};
-  for (int i = 0; i < 16 && (i * 8 + 7) < bit_count; i++) {
+  int max_bytes = std::min((int)bits.size() / 8, 16);
+
+  for (int i = 0; i < max_bytes; i++) {
     for (int b = 0; b < 8; b++) {
       raw_bytes[i] <<= 1;
       raw_bytes[i] |= bits[i * 8 + b] ? 1 : 0;
     }
   }
 
-  ESP_LOGD(TAG, "Decoded raw bytes:");
-  for (int i = 0; i < 16; i++) {
-    ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
+  // --- Ausgabe zur Kontrolle ---
+  char hexbuf[3 * 16 + 1] = {0};
+  for (int i = 0; i < max_bytes; i++) {
+    sprintf(hexbuf + i * 3, "%02X ", raw_bytes[i]);
   }
+  ESP_LOGI(TAG, "Raw Bytes: %s", hexbuf);
 
-  uint8_t checksum = 0;
-  for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
-  if (checksum != raw_bytes[15]) {
-    ESP_LOGW(TAG, "Checksum mismatch: expected 0x%02X, got 0x%02X", raw_bytes[15], checksum);
-    return;
-  }
-
-  int sync_offset = -1;
-  for (int i = 0; i < 14; i++) {
-    if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
-      sync_offset = i + 2;
-      ESP_LOGD(TAG, "SYNC pattern 0xFFFF found at offset %d", i);
-      break;
-    } else if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
-      sync_offset = i;
-      ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
-      break;
-    }
-  }
-
-  if (sync_offset == -1) {
-    sync_offset = 0;
-    ESP_LOGW(TAG, "No sync pattern found – defaulting to offset 0");
-  }
-
-  if (sync_offset + 13 >= 16) {
-    ESP_LOGW(TAG, "Not enough data after sync offset %d", sync_offset);
-    return;
-  }
-
-  for (int i = 0; i < 6; i++) {
-    uint8_t low = raw_bytes[sync_offset + 2 * i];
-    uint8_t high = raw_bytes[sync_offset + 2 * i + 1];
-    int16_t raw = (high << 8) | low;
-    if (raw == 0x7FFF || raw == 0x8000 || raw < -1000 || raw > 2000) {
-      ESP_LOGW(TAG, "Temp[%d] raw value 0x%04X out of range or invalid", i, raw & 0xFFFF);
-      continue;
-    }
-    float temp = raw / 10.0f;
-    ESP_LOGI(TAG, "Temp[%d] = %.1f °C (raw: 0x%04X)", i, temp, raw & 0xFFFF);
-    if (temp_sensors_[i] != nullptr)
-      temp_sensors_[i]->publish_state(temp);
-  }
-
-  uint8_t relays = raw_bytes[sync_offset + 12];
-  for (int i = 0; i < 4; i++) {
-    bool state = (relays >> i) & 0x01;
-    ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
-    if (relay_sensors_[i] != nullptr)
-      relay_sensors_[i]->publish_state(state);
-  }
+  // --- TODO: Daten extrahieren, Sensoren aktualisieren ---
+  // z.B. Temperatur-Offsets, Relaisstatus etc. wie in deinem ursprünglichen Code
 }
 
 }  // namespace uvr64_dlbus
