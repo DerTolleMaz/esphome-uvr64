@@ -29,6 +29,8 @@ class DLBusSensor : public sensor::Sensor, public PollingComponent {
 
   static void IRAM_ATTR isr(void *arg);
   void parse_frame_();
+  void parse_frame_2();
+
 };
 
 }  // namespace uvr64_dlbus
