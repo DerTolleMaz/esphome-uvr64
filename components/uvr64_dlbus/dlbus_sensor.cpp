@@ -87,11 +87,12 @@ void DLBusSensor::parse_frame_() {
     }
 
     float ratio = (t1 > t2) ? (float)t1 / t2 : (float)t2 / t1;
-    if (ratio < 1.2f) {
+    if (ratio < 1.05f) {
       ESP_LOGV(TAG, "Ignored edge pair %d: t1=%u t2=%u (ratio=%.2f)", i, t1, t2, ratio);
       continue;
     }
 
+    ESP_LOGV(TAG, "Bit %d decoded from t1=%u t2=%u → %d", bit_count, t1, t2, bit);
     bool bit = (t1 < t2);  // kurz-lang = 1, lang-kurz = 0
     bits[bit_count++] = bit;
 
