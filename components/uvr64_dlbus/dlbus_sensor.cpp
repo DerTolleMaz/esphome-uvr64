@@ -60,7 +60,7 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  constexpr size_t timing_len = DLBUS_TIMING_BUFFER_SIZE;  // Oder direkt 128
+  constexpr size_t timing_len = 128;
 
   ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
 
