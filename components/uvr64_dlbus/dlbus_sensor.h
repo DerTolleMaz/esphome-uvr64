@@ -1,4 +1,4 @@
-// MIT License - see LICENSE file in the project root for full details.
+// MIT License - siehe LICENSE Datei im Projektverzeichnis
 #pragma once
 
 #include "esphome/components/sensor/sensor.h"
@@ -11,9 +11,11 @@ namespace uvr64_dlbus {
 class DLBusSensor : public sensor::Sensor, public PollingComponent {
  public:
   DLBusSensor(uint8_t pin) : pin_(pin) {}
-  virtual ~DLBusSensor() = default;  
+  virtual ~DLBusSensor() = default;  // Wichtig für virtuelle Klassen
+
   void setup() override;
   void update() override;
+
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
@@ -24,6 +26,7 @@ class DLBusSensor : public sensor::Sensor, public PollingComponent {
   volatile bool frame_ready_ = false;
   uint8_t pin_;
   unsigned long last_edge_ = 0;
+
   sensor::Sensor *temp_sensors_[6] = {nullptr};
   binary_sensor::BinarySensor *relay_sensors_[4] = {nullptr};
 
