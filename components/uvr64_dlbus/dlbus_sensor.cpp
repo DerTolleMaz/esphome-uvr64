@@ -68,14 +68,11 @@ void DLBusSensor::parse_frame_() {
   uint32_t sum = 0;
   for (int i = 0; i < bit_index_; i++) sum += timings_[i];
   uint32_t avg_duration = sum / bit_index_;
-  uint32_t min_total = avg_duration * 8 / 10;
-  uint32_t max_total = avg_duration * 12 / 10;
-
-  ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
-
+  const uint32_t min_total = avg_duration * 7 / 10;
+  const uint32_t max_total = avg_duration * 13 / 10;
+  
   bool bits[128];
   int bit_count = 0;
-
   
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
@@ -87,8 +84,8 @@ void DLBusSensor::parse_frame_() {
       continue;
     }
   
-    // Immer fest interpretieren: t1 < t2 → 1, sonst 0
-    bool bit = (t1 < t2);
+    // DL-Bus: lang-kurz = 1, kurz-lang = 0
+    bool bit = (t1 > t2);
     bits[bit_count++] = bit;
   
     if (bit_count >= 128) break;
