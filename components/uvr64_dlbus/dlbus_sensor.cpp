@@ -60,16 +60,18 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
+  constexpr size_t timing_len = DLBUS_TIMING_BUFFER_SIZE;  // Oder direkt 128
+
   ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
 
-  if (this->timings_.size() < 2) {
+  if (timing_len < 2) {
     ESP_LOGW(TAG, "Too few edge timings for decoding");
     return;
   }
 
-  // Timing-Log (optional, zur Analyse)
-  ESP_LOGI(TAG, "Timing sequence (%zu edges):", this->timings_.size());
-  for (size_t i = 0; i < std::min(this->timings_.size(), size_t(33)); i++) {
+  // Optional: Logge die ersten Timing-Werte
+  ESP_LOGI(TAG, "Timing sequence (%zu edges):", timing_len);
+  for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
     ESP_LOGI(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
   }
 
@@ -77,11 +79,10 @@ void DLBusSensor::parse_frame_() {
   std::vector<bool> bits;
   int zero_count = 0, one_count = 0, skip_count = 0;
 
-  for (size_t i = 0; i + 1 < this->timings_.size(); i += 2) {
+  for (size_t i = 0; i + 1 < timing_len; i += 2) {
     uint32_t t1 = this->timings_[i];
     uint32_t t2 = this->timings_[i + 1];
 
-    // Robust gegen Störungen: Grenzwerte empirisch gewählt
     if (t1 < 20 && t2 > 40) {
       bits.push_back(false);  // 0
       zero_count++;
@@ -90,7 +91,7 @@ void DLBusSensor::parse_frame_() {
       one_count++;
     } else {
       skip_count++;
-      ESP_LOGV(TAG, "Unclear pulse widths: t1=%u, t2=%u (skipped)", t1, t2);
+      ESP_LOGV(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
       continue;
     }
 
@@ -104,7 +105,7 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  // --- Bits → Bytes wandeln ---
+  // --- Bits → Bytes ---
   uint8_t raw_bytes[16] = {0};
   int max_bytes = std::min((int)bits.size() / 8, 16);
 
@@ -115,16 +116,16 @@ void DLBusSensor::parse_frame_() {
     }
   }
 
-  // --- Ausgabe zur Kontrolle ---
+  // Hex-Dump
   char hexbuf[3 * 16 + 1] = {0};
   for (int i = 0; i < max_bytes; i++) {
     sprintf(hexbuf + i * 3, "%02X ", raw_bytes[i]);
   }
   ESP_LOGI(TAG, "Raw Bytes: %s", hexbuf);
 
-  // --- TODO: Daten extrahieren, Sensoren aktualisieren ---
-  // z.B. Temperatur-Offsets, Relaisstatus etc. wie in deinem ursprünglichen Code
+  // TODO: DL-Bus-Inhalt auswerten
 }
+
 
 }  // namespace uvr64_dlbus
 }  // namespace esphome
