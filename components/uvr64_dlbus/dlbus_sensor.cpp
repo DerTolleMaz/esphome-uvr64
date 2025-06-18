@@ -51,6 +51,10 @@ void DLBusSensor::parse_frame_() {
 
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
+  ESP_LOGD("uvr64_dlbus", "Raw bytes:");
+  for (int i = 0; i < 16; i++) {
+    ESP_LOGD("uvr64_dlbus", "[%02d] 0x%02X", i, raw_bytes[i]);
+  }
 
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
