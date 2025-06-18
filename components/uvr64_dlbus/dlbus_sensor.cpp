@@ -11,10 +11,12 @@ void DLBusSensor::setup() {
   pinMode(pin_, INPUT);
   last_edge_ = micros();
   attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
 }
 
 void DLBusSensor::update() {
   if (frame_ready_) {
+    ESP_LOGD(TAG, "DLBus frame received, decoding...");
     parse_frame_();
     bit_index_ = 0;
     last_edge_ = micros();
@@ -47,17 +49,19 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  if (bit_index_ < 80) return;
+  if (bit_index_ < 80) {
+    ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
+    return;
+  }
 
-  // Timingkalibrierung: Mittelwert ermitteln
   uint32_t sum = 0;
   for (int i = 0; i < bit_index_; i++) sum += timings_[i];
   uint32_t avg_duration = sum / bit_index_;
 
+  ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
+
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
-
-  ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
 
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
@@ -69,7 +73,8 @@ void DLBusSensor::parse_frame_() {
     } else if (abs((int)t1 - (int)t2) > avg_duration / 2) {
       bit = true;  // Manchester: 10 = 1
     } else {
-      continue; // unklarer Pegel
+      ESP_LOGV(TAG, "Unclear bit timing at %d: t1=%u t2=%u", i, t1, t2);
+      continue;
     }
 
     raw_bytes[byte_i] <<= 1;
@@ -82,32 +87,38 @@ void DLBusSensor::parse_frame_() {
     if (byte_i >= 16) break;
   }
 
-  ESP_LOGD(TAG, "Raw bytes:");
+  ESP_LOGD(TAG, "Decoded raw bytes:");
   for (int i = 0; i < 16; i++) {
     ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
-  // SYNC-Suche: Finde 0xFF 0xFF Startkennung
   int sync_offset = -1;
   for (int i = 0; i < 14; i++) {
     if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
       sync_offset = i + 2;
+      ESP_LOGD(TAG, "SYNC found at offset %d", i);
       break;
     }
   }
-  if (sync_offset == -1 || sync_offset + 11 >= 16) return;
+  if (sync_offset == -1 || sync_offset + 11 >= 16) {
+    ESP_LOGW(TAG, "SYNC not found or not enough data after sync");
+    return;
+  }
 
   for (int i = 0; i < 6; i++) {
     int16_t raw = (raw_bytes[sync_offset + 2 * i] << 8) | raw_bytes[sync_offset + 2 * i + 1];
     float temp = raw / 10.0f;
+    ESP_LOGI(TAG, "Temp[%d] = %.1f °C", i, temp);
     if (temp_sensors_[i] != nullptr)
       temp_sensors_[i]->publish_state(temp);
   }
 
   uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
+    bool state = (relays >> i) & 0x01;
+    ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
     if (relay_sensors_[i] != nullptr)
-      relay_sensors_[i]->publish_state((relays >> i) & 0x01);
+      relay_sensors_[i]->publish_state(state);
   }
 }
 
