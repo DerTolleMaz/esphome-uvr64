@@ -131,9 +131,9 @@ void DLBusSensor::parse_frame_2() {
 
   // Logging aller Timings zur Analyse
   ESP_LOGI(TAG, "Timing sequence (%d edges):", bit_index_);
-  for (int i = 0; i < bit_index_; i++) {
-    ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
-  }
+  //for (int i = 0; i < bit_index_; i++) {
+  //  ESP_LOGI(TAG, "  timings[%03d] = %3u µs", i, timings_[i]);
+ // }
 
   // Manchester-Dekodierung: feste Toleranz, keine ratio-Prüfung
   bool bits[128];
