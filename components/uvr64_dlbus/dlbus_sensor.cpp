@@ -17,6 +17,16 @@ void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *senso
     relay_sensors_[index] = sensor;
 }
 
+void DLBusSensor::setup() {
+  // Setup-Logik hier
+  ESP_LOGI(TAG, "DLBusSensor setup() wurde aufgerufen");
+}
+
+void DLBusSensor::update() {
+  // Update-Logik hier
+  ESP_LOGD(TAG, "DLBusSensor update() wurde aufgerufen");
+}
+
 void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
