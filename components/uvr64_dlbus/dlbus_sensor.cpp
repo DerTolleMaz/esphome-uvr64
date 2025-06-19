@@ -73,7 +73,7 @@ void DLBusSensor::parse_frame_() {
       continue;
     }
 
-    bool bit = t1 > t2; // Manchester decoding
+    bool bit = t1 > t2;
 
     raw_bytes[byte_i] <<= 1;
     raw_bytes[byte_i] |= bit;
