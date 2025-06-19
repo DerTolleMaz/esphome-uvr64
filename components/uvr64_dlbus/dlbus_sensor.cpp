@@ -25,7 +25,6 @@ void DLBusSensor::update() {
   }
 }
 
-
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
   if (index >= 0 && index < 6)
     temp_sensors_[index] = sensor;
