@@ -26,7 +26,7 @@ class DLBusSensor : public sensor::Sensor, public PollingComponent {
   unsigned long last_edge_ = 0;
   sensor::Sensor *temp_sensors_[6] = {nullptr};
   binary_sensor::BinarySensor *relay_sensors_[4] = {nullptr};
-
+  uint8_t bits_[256]{};
   static void IRAM_ATTR isr(void *arg);
   void parse_frame_();
   void parse_frame_2();
