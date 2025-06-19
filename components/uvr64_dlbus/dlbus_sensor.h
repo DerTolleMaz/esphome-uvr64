@@ -1,7 +1,6 @@
-// dlbus_sensor.h
+// DL-Bus Dekodierungskomponente für ESPHome (mit Manchester-Decoding und Telegrammauswertung für UVR64)
 #pragma once
 
-#include "esphome.h"
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
@@ -11,7 +10,7 @@ namespace uvr64_dlbus {
 
 class DLBusSensor : public PollingComponent {
  public:
-  DLBusSensor() : PollingComponent(10000) {}  // Polling-Intervall: 10 Sekunden
+  DLBusSensor() : PollingComponent(10000) {}  // alle 10 Sekunden
 
   void setup() override;
   void update() override;
