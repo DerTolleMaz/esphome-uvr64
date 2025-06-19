@@ -41,7 +41,12 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
   auto *self = static_cast<DLBusSensor *>(arg);
   unsigned long now = micros();
   uint32_t duration = now - self->last_edge_;
+
+  // Software-Entprellung: ignorieren, wenn zu schnell
+  if (duration < 100) return;  // z. B. alles < 100 µs verwerfen
+
   self->last_edge_ = now;
+
   if (self->bit_index_ < MAX_BITS) {
     self->timings_[self->bit_index_++] = duration;
   } else {
@@ -49,7 +54,6 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
     detachInterrupt(digitalPinToInterrupt(self->pin_));
   }
 }
-
 void DLBusSensor::parse_frame_() {
   if (bit_index_ < 80) {
     ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
