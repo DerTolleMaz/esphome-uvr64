@@ -1,42 +1,35 @@
-// DL-Bus Dekodierungskomponente für ESPHome (mit Manchester-Decoding und Telegrammauswertung für UVR64)
+
+// MIT License - see LICENSE file in the project root for full details.
 #pragma once
 
-#include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/core/component.h"
 
 namespace esphome {
 namespace uvr64_dlbus {
 
-class DLBusSensor : public PollingComponent {
+class DLBusSensor : public sensor::Sensor, public PollingComponent {
  public:
-  DLBusSensor() : PollingComponent(10000) {}  // alle 10 Sekunden
-
+  DLBusSensor(uint8_t pin) : pin_(pin) {}
+  virtual ~DLBusSensor() = default;  
   void setup() override;
   void update() override;
-
-  void set_temp_sensor(int index, sensor::Sensor *sensor) {
-    if (index >= 0 && index < 6) this->temp_sensors_[index] = sensor;
-  }
-
-  void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
-    if (index >= 0 && index < 4) this->relay_sensors_[index] = sensor;
-  }
-
-  void set_timings(const std::array<uint32_t, 128> &timings) {
-    this->timings_ = timings;
-    this->frame_ready_ = true;
-  }
+  void set_temp_sensor(int index, sensor::Sensor *sensor);
+  void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
  protected:
-  void parse_frame_();
-
-  std::array<uint32_t, 128> timings_;
-  std::array<bool, 256> bits_;
-  bool frame_ready_{false};
-
+  static const int MAX_BITS = 128;
+  volatile uint32_t timings_[MAX_BITS];
+  volatile int bit_index_ = 0;
+  volatile bool frame_ready_ = false;
+  uint8_t pin_;
+  unsigned long last_edge_ = 0;
   sensor::Sensor *temp_sensors_[6] = {nullptr};
   binary_sensor::BinarySensor *relay_sensors_[4] = {nullptr};
+
+  static void IRAM_ATTR isr(void *arg);
+  void parse_frame_();
 };
 
 }  // namespace uvr64_dlbus
