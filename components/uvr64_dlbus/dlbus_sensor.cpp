@@ -76,6 +76,30 @@ void DLBusSensor::compute_timing_stats_(uint32_t &median, float &mean, float &st
   for (auto t : sorted_timings)
     variance += (t - mean) * (t - mean);
   stddev = sqrt(variance / bit_index_);
+
+  // Histogramm der Bitlängen
+  const int BIN_COUNT = 10;
+  const uint32_t BIN_WIDTH = 2000;  // µs
+  int histogram[BIN_COUNT] = {0};
+  int overflows = 0;
+  
+  for (int i = 0; i < bit_index_; i++) {
+    uint32_t t = timings_[i];
+    int bin = t / BIN_WIDTH;
+    if (bin >= BIN_COUNT)
+      overflows++;
+    else
+      histogram[bin]++;
+}
+
+// Ausgabe des Histogramms
+ESP_LOGI(TAG, "Bit Timing Histogram (Bin width: %u µs):", BIN_WIDTH);
+for (int i = 0; i < BIN_COUNT; i++) {
+  ESP_LOGI(TAG, "  %2u - %2u ms: %3d", i * 2, (i + 1) * 2 - 1, histogram[i]);
+}
+if (overflows > 0)
+  ESP_LOGI(TAG, "  >%u ms: %3d", BIN_COUNT * 2, overflows);
+  
 }
 
 void DLBusSensor::parse_frame_() {
