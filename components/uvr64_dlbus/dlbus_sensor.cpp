@@ -29,6 +29,12 @@ void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *senso
   }
 }
 
+  void set_timings(const std::array<uint32_t, 128> &timings) {
+    this->timings_ = timings;
+    this->frame_ready_ = true;
+  }
+
+
 void DLBusSensor::update() {
   if (!frame_ready_) return;
   frame_ready_ = false;
