@@ -18,10 +18,7 @@ class DLBusSensor : public PollingComponent {
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
-  void set_timings(const std::array<uint32_t, 128> &timings) {
-    this->timings_ = timings;
-    this->frame_ready_ = true;
-  }
+  void set_timings(const std::array<uint32_t, 128> &timings);
 
  protected:
   void parse_frame_();
