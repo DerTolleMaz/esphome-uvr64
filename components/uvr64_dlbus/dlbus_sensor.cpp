@@ -1,4 +1,4 @@
-// DL-Bus Dekodierungskomponente für ESPHome (mit Manchester-Decoding und Telegrammauswertung für UVR64)
+// MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
@@ -7,115 +7,156 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-void DLBusSensor::setup() {
-  ESP_LOGI(TAG, "DLBusSensor setup complete");
+void DLBusSensor::setup() {Add commentMore actions
+  pinMode(pin_, INPUT);
+  last_edge_ = micros();
+  attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
 }
 
 void DLBusSensor::update() {
-  if (!frame_ready_) return;
-  frame_ready_ = false;
-  ESP_LOGD(TAG, "DLBus frame received (update), decoding...");
-  parse_frame_();
+  if (frame_ready_) {
+    ESP_LOGD(TAG, "DLBus frame received, decoding...");
+    parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+    frame_ready_ = false;
+  }
+}
+
+void DLBusSensor::loop() {
+  if (frame_ready_) {
+    ESP_LOGD("uvr64_dlbus", "DLBus frame received, decoding...");
+    parse_frame_();
+    bit_index_ = 0;
+    last_edge_ = micros();
+    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
+    frame_ready_ = false;
+  }
+}
+
+void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
+  if (index >= 0 && index < 6)
+    temp_sensors_[index] = sensor;
+}
+
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4)
+    relay_sensors_[index] = sensor;
+}
+
+void IRAM_ATTR DLBusSensor::isr(void *arg) {
+  auto *self = static_cast<DLBusSensor *>(arg);
+  unsigned long now = micros();
+  uint32_t duration = now - self->last_edge_;
+  self->last_edge_ = now;
+  if (self->bit_index_ < MAX_BITS) {
+    self->timings_[self->bit_index_++] = duration;
+  } else {
+    self->frame_ready_ = true;
+    detachInterrupt(digitalPinToInterrupt(self->pin_));
+  }
 }
 
 void DLBusSensor::parse_frame_() {
-  constexpr size_t timing_len = 128;
-  ESP_LOGD(TAG, "Timing sequence (%zu edges):", timing_len);
-  for (size_t i = 0; i < std::min(timing_len, size_t(33)); i++) {
-    ESP_LOGD(TAG, "  timings[%03zu] = %3u µs", i, this->timings_[i]);
+  if (bit_index_ < 80) {
+    ESP_LOGW(TAG, "Received frame too short: %d bits", bit_index_);
+    return;
   }
 
-  size_t bit_count = 0;
-  for (size_t i = 0; i + 1 < timing_len; i += 2) {
-    uint32_t t1 = this->timings_[i];
-    uint32_t t2 = this->timings_[i + 1];
+  uint32_t sum = 0;
+  for (int i = 0; i < bit_index_; i++) sum += timings_[i];
+  uint32_t avg_duration = sum / bit_index_;
 
-    if (t1 < 10 || t2 < 10 || t1 > 130 || t2 > 130) {
-      ESP_LOGD(TAG, "Skipping unplausible timings t1=%u, t2=%u", t1, t2);
+  ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
+
+  uint8_t raw_bytes[16] = {0};
+  int byte_i = 0, bit_i = 0;
+
+  for (int i = 0; i < bit_index_ - 1; i += 2) {
+    uint32_t t1 = timings_[i];
+    uint32_t t2 = timings_[i + 1];
+    bool bit = false;
+
+    if (abs((int)t1 - (int)t2) < avg_duration / 4) {
+      bit = false; // Manchester: 01 = 0
+    } else if (abs((int)t1 - (int)t2) > avg_duration / 2) {
+      bit = true;  // Manchester: 10 = 1
+    } else {
+      ESP_LOGV(TAG, "Unclear bit timing at %d: t1=%u t2=%u", i, t1, t2);
       continue;
     }
 
-    if (t1 < t2) {
-      bits_[bit_count++] = 1;
-    } else {
-      bits_[bit_count++] = 0;
+    raw_bytes[byte_i] <<= 1;
+    raw_bytes[byte_i] |= bit;
+    bit_i++;
+    if (bit_i == 8) {
+      bit_i = 0;
+      byte_i++;
     }
-    ESP_LOGD(TAG, "Bit Count %zu", bit_count);
+    if (byte_i >= 16) break;
+  }
 
-    if (t1 > 1000 || t2 > 1000) {
-      ESP_LOGD(TAG, "Aborting decode: framing break at i=%zu (t1=%u µs, t2=%u µs)", i, t1, t2);
+  ESP_LOGD(TAG, "Decoded raw bytes:");
+  for (int i = 0; i < 16; i++) {
+    ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
+  }
+
+  // Prüfsumme berechnen (XOR über alle Bytes außer letztem)
+  uint8_t checksum = 0;
+  for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
+  if (checksum != raw_bytes[15]) {
+    ESP_LOGW(TAG, "Checksum mismatch: expected 0x%02X, got 0x%02X", raw_bytes[15], checksum);
+  }
+
+  int sync_offset = -1;
+  for (int i = 0; i < 14; i++) {
+    if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
+      sync_offset = i + 2;
+      ESP_LOGD(TAG, "SYNC found at offset %d", i);
       break;
     }
   }
-
-  ESP_LOGD(TAG, "Decoded bit count: %zu", bit_count);
-  if (bit_count < 32) {
-    ESP_LOGD(TAG, "Decoded too few bits: %zu", bit_count);
-    return;
-  }
-
-  uint8_t raw_bytes[32] = {0};
-  for (int i = 0; i < 32 && i * 8 + 7 < bit_count; i++) {
-    for (int b = 0; b < 8; b++) {
-      raw_bytes[i] <<= 1;
-      if (bits_[i * 8 + b]) raw_bytes[i] |= 0x01;
+  if (sync_offset == -1) {
+    for (int i = 0; i < 14; i++) {
+      if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
+        sync_offset = i;
+        ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
+        break;
+      }
     }
   }
+  if (sync_offset == -1) {
+    sync_offset = 0;
+    ESP_LOGW(TAG, "No known sync found – falling back to offset 0");
+  }
 
-  ESP_LOGD(TAG, "First few bytes: %02X %02X %02X %02X", raw_bytes[0], raw_bytes[1], raw_bytes[2], raw_bytes[3]);
-
-  if (raw_bytes[0] != 0xAA) {
-    ESP_LOGW(TAG, "Ungültiger Startwert: 0x%02X", raw_bytes[0]);
+  if (sync_offset + 13 >= 16) {
+    ESP_LOGW(TAG, "Not enough data after sync offset %d", sync_offset);
     return;
   }
 
-  // Gerätekennung prüfen (UVR64: 0x10)
-  if (raw_bytes[1] != 0x10) {
-    ESP_LOGW(TAG, "Nicht UVR64-Adresse: 0x%02X", raw_bytes[1]);
-    return;
-  }
-  ESP_LOGD(TAG, "Gerätekennung: 0x%02X (UVR64, ID %d)", raw_bytes[1], raw_bytes[1] & 0x0F);
-
-  // CRC-Prüfung (einfache Prüfsumme über n-1 Bytes)
-  uint8_t crc = 0;
-  for (int i = 0; i < 31; i++) crc += raw_bytes[i];
-  if (crc != raw_bytes[31]) {
-    ESP_LOGW(TAG, "CRC ungültig: berechnet 0x%02X, empfangen 0x%02X", crc, raw_bytes[31]);
-    return;
-  }
-
-  // Temperaturen dekodieren
   for (int i = 0; i < 6; i++) {
-    uint8_t lo = raw_bytes[2 + i * 2];
-    uint8_t hi = raw_bytes[3 + i * 2];
-    int16_t value = static_cast<int16_t>((hi << 8) | lo);
-
-    float temperature;
-    if (hi & 0x80) {
-      temperature = 0.1f * (value - 0x10000);
-    } else {
-      temperature = 0.1f * value;
-    }
-
-    if (temperature < -50.0f || temperature > 150.0f) {
-      ESP_LOGW(TAG, "Temperatur %d ungültig: %.1f °C — verworfen", i + 1, temperature);
+    uint8_t low = raw_bytes[sync_offset + 2 * i];
+    uint8_t high = raw_bytes[sync_offset + 2 * i + 1];
+    int16_t raw = (high << 8) | low;
+    if (raw == 0x7FFF || raw == 0x8000 || raw < -1000 || raw > 2000) {
+      ESP_LOGW(TAG, "Temp[%d] raw value 0x%04X out of range or invalid", i, raw & 0xFFFF);
       continue;
     }
-
-    ESP_LOGD(TAG, "Temperatur %d: %.1f °C", i + 1, temperature);
-    if (this->temp_sensors_[i] != nullptr) {
-      this->temp_sensors_[i]->publish_state(temperature);
-    }
+    float temp = raw / 10.0f;
+    ESP_LOGI(TAG, "Temp[%d] = %.1f °C (raw: 0x%04X)", i, temp, raw & 0xFFFF);
+    if (temp_sensors_[i] != nullptr)
+      temp_sensors_[i]->publish_state(temp);
   }
 
-  // Relaisausgänge (UVR64): Byte 14
-  uint8_t relay_byte = raw_bytes[14];
+  uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
-    bool relay_state = relay_byte & (1 << (3 + i));
-    ESP_LOGD(TAG, "Relais %d: %s", i + 1, relay_state ? "AN" : "AUS");
-    if (this->relay_sensors_[i] != nullptr) {
-      this->relay_sensors_[i]->publish_state(relay_state);
-    }
+    bool state = (relays >> i) & 0x01;
+    ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
+    if (relay_sensors_[i] != nullptr)
+      relay_sensors_[i]->publish_state(state);
   }
 }
 
