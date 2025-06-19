@@ -16,13 +16,8 @@ class DLBusSensor : public PollingComponent {
   void loop() override;
   void update() override;
 
-  void set_temp_sensor(int index, sensor::Sensor *sensor) {
-    if (index >= 0 && index < 6) temp_sensors_[index] = sensor;
-  }
-
-  void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
-    if (index >= 0 && index < 4) relay_sensors_[index] = sensor;
-  }
+void set_temp_sensor(int index, sensor::Sensor *sensor);
+void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
   void set_timings(const std::vector<uint32_t> &timings) {
     for (size_t i = 0; i < timings.size() && i < 128; i++) {
