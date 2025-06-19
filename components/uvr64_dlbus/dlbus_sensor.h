@@ -7,7 +7,8 @@
 namespace esphome {
 namespace uvr64_dlbus {
 
-class DLBusSensor : public Component, public PollingComponent {
+class DLBusSensor : public PollingComponent {
+
  public:
   DLBusSensor() : PollingComponent(10000) {}  // Update alle 10 Sekunden
 
