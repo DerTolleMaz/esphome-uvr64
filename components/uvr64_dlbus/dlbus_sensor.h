@@ -1,36 +1,39 @@
-// MIT License - see LICENSE file in the project root for full details.
 #pragma once
 
+#include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
-#include "esphome/core/component.h"
 
 namespace esphome {
 namespace uvr64_dlbus {
 
-class DLBusSensor : public sensor::Sensor, public PollingComponent {
+class DLBusSensor : public Component, public PollingComponent {
  public:
-  explicit DLBusSensor(uint8_t pin) : pin_(pin) {}
+  DLBusSensor() : PollingComponent(10000) {}  // Update alle 10 Sekunden
+
   void setup() override;
   void loop() override;
   void update() override;
+
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
 
- protected:
-  static const int MAX_BITS = 128;
-  volatile uint32_t timings_[MAX_BITS];
-  volatile int bit_index_ = 0;
-  volatile bool frame_ready_ = false;
-  uint8_t pin_;
-  unsigned long last_edge_ = 0;
-  sensor::Sensor *temp_sensors_[6] = {nullptr};
-  binary_sensor::BinarySensor *relay_sensors_[4] = {nullptr};
-  uint8_t bits_[256]{};
-  static void IRAM_ATTR isr(void *arg);
-  void parse_frame_();
-  void parse_frame_2();
+  void set_timings(const std::vector<uint32_t> &timings) {
+    size_t count = std::min(timings.size(), sizeof(this->timings_) / sizeof(this->timings_[0]));
+    std::copy(timings.begin(), timings.begin() + count, this->timings_);
+    this->frame_ready_ = true;
+  }
 
+ protected:
+  void parse_frame_();
+
+  uint32_t timings_[128] = {};
+  bool frame_ready_ = false;
+
+  bool bits_[1024] = {};  // max. 512 Bit für 128 Flankenpaare
+
+  sensor::Sensor *temp_sensors_[6] = {};
+  binary_sensor::BinarySensor *relay_sensors_[4] = {};
 };
 
 }  // namespace uvr64_dlbus
