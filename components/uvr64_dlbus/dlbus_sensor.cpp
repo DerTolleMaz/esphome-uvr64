@@ -11,30 +11,6 @@ void DLBusSensor::setup() {
   ESP_LOGI(TAG, "DLBusSensor setup complete");
 }
 
-void DLBusSensor::loop() {
-  if (!frame_ready_) return;
-  frame_ready_ = false;
-  parse_frame_();
-}
-
-void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
-  if (index >= 0 && index < 6) {
-    this->temp_sensors_[index] = sensor;
-  }
-}
-
-void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
-  if (index >= 0 && index < 4) {
-    this->relay_sensors_[index] = sensor;
-  }
-}
-
-  void set_timings(const std::array<uint32_t, 128> &timings) {
-    this->timings_ = timings;
-    this->frame_ready_ = true;
-  }
-
-
 void DLBusSensor::update() {
   if (!frame_ready_) return;
   frame_ready_ = false;
