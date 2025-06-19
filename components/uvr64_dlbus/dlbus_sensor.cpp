@@ -25,16 +25,6 @@ void DLBusSensor::update() {
   }
 }
 
-//void DLBusSensor::loop() {
-//  if (frame_ready_) {
-//    ESP_LOGD("uvr64_dlbus", "DLBus frame received, decoding...");
-//    parse_frame_();
-//    bit_index_ = 0;
-//    last_edge_ = micros();
-//    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-//    frame_ready_ = false;
-//  }
-//}
 
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
   if (index >= 0 && index < 6)
@@ -77,16 +67,14 @@ void DLBusSensor::parse_frame_() {
   for (int i = 0; i < bit_index_ - 1; i += 2) {
     uint32_t t1 = timings_[i];
     uint32_t t2 = timings_[i + 1];
-    bool bit = false;
+    uint32_t total = t1 + t2;
 
-    if (abs((int)t1 - (int)t2) < avg_duration / 4) {
-      bit = false; // Manchester: 01 = 0
-    } else if (abs((int)t1 - (int)t2) > avg_duration / 2) {
-      bit = true;  // Manchester: 10 = 1
-    } else {
-      ESP_LOGV(TAG, "Unclear bit timing at %d: t1=%u t2=%u", i, t1, t2);
+    if (total < avg_duration * 2 * 0.75f || total > avg_duration * 2 * 1.25f) {
+      ESP_LOGV(TAG, "Timing out of range at %d: t1=%u t2=%u (sum=%u)", i, t1, t2, total);
       continue;
     }
+
+    bool bit = t1 > t2; // Manchester decoding
 
     raw_bytes[byte_i] <<= 1;
     raw_bytes[byte_i] |= bit;
@@ -103,7 +91,6 @@ void DLBusSensor::parse_frame_() {
     ESP_LOGD(TAG, "[%02d] 0x%02X", i, raw_bytes[i]);
   }
 
-  // Prüfsumme berechnen (XOR über alle Bytes außer letztem)
   uint8_t checksum = 0;
   for (int i = 0; i < 15; i++) checksum ^= raw_bytes[i];
   if (checksum != raw_bytes[15]) {
@@ -123,6 +110,15 @@ void DLBusSensor::parse_frame_() {
       if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
         sync_offset = i;
         ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
+        break;
+      }
+    }
+  }
+  if (sync_offset == -1) {
+    for (int i = 0; i < 13; i++) {
+      if (raw_bytes[i] == 0x20 && raw_bytes[i + 1] == 0x00 && raw_bytes[i + 2] == 0x10) {
+        sync_offset = i - 3;
+        ESP_LOGD(TAG, "UVR64 device ID found at %d", i);
         break;
       }
     }
