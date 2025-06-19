@@ -25,6 +25,8 @@ void DLBusSensor::update() {
   }
 }
 
+
+
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
   if (index >= 0 && index < 6)
     temp_sensors_[index] = sensor;
@@ -63,18 +65,12 @@ void DLBusSensor::parse_frame_() {
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
 
-  for (int i = 0; i < bit_index_ - 1; i += 2) {
-    uint32_t t1 = timings_[i];
-    uint32_t t2 = timings_[i + 1];
-    uint32_t total = t1 + t2;
-
-    if (total < avg_duration * 2 * 0.75f || total > avg_duration * 2 * 1.25f) {
-      ESP_LOGV(TAG, "Timing out of range at %d: t1=%u t2=%u (sum=%u)", i, t1, t2, total);
+  for (int i = 0; i < bit_index_; i++) {
+    if (timings_[i] < 100 || timings_[i] > 50000) {
+      ESP_LOGV(TAG, "Timing anomaly at %d: duration=%u", i, timings_[i]);
       continue;
     }
-
-    bool bit = t1 > t2;
-
+    bool bit = (timings_[i] > avg_duration);
     raw_bytes[byte_i] <<= 1;
     raw_bytes[byte_i] |= bit;
     bit_i++;
@@ -97,34 +93,16 @@ void DLBusSensor::parse_frame_() {
   }
 
   int sync_offset = -1;
-  for (int i = 0; i < 14; i++) {
-    if (raw_bytes[i] == 0xFF && raw_bytes[i + 1] == 0xFF) {
-      sync_offset = i + 2;
-      ESP_LOGD(TAG, "SYNC found at offset %d", i);
+  for (int i = 0; i < 13; i++) {
+    if (raw_bytes[i] == 0x20 && raw_bytes[i + 1] == 0x00 && raw_bytes[i + 2] == 0x10) {
+      sync_offset = i - 3;
+      ESP_LOGD(TAG, "UVR64 device ID found at offset %d", i);
       break;
     }
   }
   if (sync_offset == -1) {
-    for (int i = 0; i < 14; i++) {
-      if (raw_bytes[i] == 0x0B && raw_bytes[i + 1] == 0x88) {
-        sync_offset = i;
-        ESP_LOGW(TAG, "Alternative sync pattern 0x0B88 found at offset %d", i);
-        break;
-      }
-    }
-  }
-  if (sync_offset == -1) {
-    for (int i = 0; i < 13; i++) {
-      if (raw_bytes[i] == 0x20 && raw_bytes[i + 1] == 0x00 && raw_bytes[i + 2] == 0x10) {
-        sync_offset = i - 3;
-        ESP_LOGD(TAG, "UVR64 device ID found at %d", i);
-        break;
-      }
-    }
-  }
-  if (sync_offset == -1) {
     sync_offset = 0;
-    ESP_LOGW(TAG, "No known sync found – falling back to offset 0");
+    ESP_LOGW(TAG, "No device ID sync found – falling back to offset 0");
   }
 
   if (sync_offset + 13 >= 16) {
