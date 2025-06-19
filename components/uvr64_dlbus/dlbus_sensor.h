@@ -24,7 +24,7 @@ class DLBusSensor : public PollingComponent {
     std::copy(timings.begin(), timings.begin() + count, this->timings_);
     this->frame_ready_ = true;
   }
-
+ explicit DLBusSensor(uint32_t update_interval = 10000) : PollingComponent(update_interval) {}
  protected:
   void parse_frame_();
 
