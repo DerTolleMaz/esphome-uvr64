@@ -17,6 +17,18 @@ void DLBusSensor::loop() {
   parse_frame_();
 }
 
+void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
+  if (index >= 0 && index < 6) {
+    this->temp_sensors_[index] = sensor;
+  }
+}
+
+void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *sensor) {
+  if (index >= 0 && index < 4) {
+    this->relay_sensors_[index] = sensor;
+  }
+}
+
 void DLBusSensor::update() {
   if (!frame_ready_) return;
   frame_ready_ = false;
