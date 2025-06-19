@@ -1,6 +1,7 @@
 // MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
+#include <algorithm>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -24,7 +25,6 @@ void DLBusSensor::update() {
     frame_ready_ = false;
   }
 }
-
 
 
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
@@ -56,11 +56,11 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  uint32_t sum = 0;
-  for (int i = 0; i < bit_index_; i++) sum += timings_[i];
-  uint32_t avg_duration = sum / bit_index_;
-
-  ESP_LOGD(TAG, "Bit count: %d, avg duration: %u µs", bit_index_, avg_duration);
+  // Histogram-Schwellenwertbestimmung
+  std::vector<uint32_t> sorted_timings(timings_, timings_ + bit_index_);
+  std::sort(sorted_timings.begin(), sorted_timings.end());
+  uint32_t threshold = sorted_timings[bit_index_ / 2];
+  ESP_LOGD(TAG, "Bit count: %d, threshold duration (median): %u µs", bit_index_, threshold);
 
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
@@ -70,7 +70,7 @@ void DLBusSensor::parse_frame_() {
       ESP_LOGV(TAG, "Timing anomaly at %d: duration=%u", i, timings_[i]);
       continue;
     }
-    bool bit = (timings_[i] > avg_duration);
+    bool bit = (timings_[i] > threshold);
     raw_bytes[byte_i] <<= 1;
     raw_bytes[byte_i] |= bit;
     bit_i++;
