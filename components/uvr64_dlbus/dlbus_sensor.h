@@ -17,7 +17,7 @@ class DLBusSensor : public sensor::Sensor, public PollingComponent {
   void update() override;
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
-
+  volatile uint32_t min_valid_timing_ = 1000;  // Startwert: 1000 µs
  protected:
   static const int MAX_BITS = 128;
   volatile uint32_t timings_[MAX_BITS];
