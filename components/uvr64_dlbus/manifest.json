@@ -1,8 +1,11 @@
 {
-  "name": "UVR64 DLBus",
   "domain": "uvr64_dlbus",
-  "codeowners": ["@derTolleMaz"],
-  "requirements": [],
-  "dependencies": [],
-  "files": ["dlbus_sensor.cpp", "dlbus_sensor.h"]
+  "name": "UVR64 DL-Bus",
+  "files": [
+    "dlbus_sensor.h",
+    "dlbus_sensor.cpp",
+    "dlbus_sensor.py",
+    "__init__.py"
+  ],
+  "dependencies": ["sensor", "binary_sensor"]
 }
