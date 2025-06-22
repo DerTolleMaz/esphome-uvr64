@@ -1,0 +1,8 @@
+{
+  "name": "UVR64 DLBus",
+  "domain": "uvr64_dlbus",
+  "codeowners": ["@derTolleMaz"],
+  "requirements": [],
+  "dependencies": [],
+  "files": ["dlbus_sensor.cpp", "dlbus_sensor.h"]
+}
