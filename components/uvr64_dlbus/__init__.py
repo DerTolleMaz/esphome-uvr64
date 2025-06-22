@@ -1,1 +1,1 @@
-from .dlbus_sensor import DLBusSensor
+from . import dlbus_sensor
