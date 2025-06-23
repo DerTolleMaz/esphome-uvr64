@@ -1,9 +1,6 @@
-// MIT License - see LICENSE file in the project root for full details.
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 #include <algorithm>
-#include <cmath>
-#include <vector>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -11,21 +8,24 @@ namespace uvr64_dlbus {
 static const char *const TAG = "uvr64_dlbus";
 
 void DLBusSensor::setup() {
-  pinMode(pin_, INPUT);
+  pin_->setup();
   last_edge_ = micros();
-  attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
+  pinMode(pin_->get_pin(), INPUT);
+  attachInterruptArg(digitalPinToInterrupt(pin_->get_pin()), isr, this, CHANGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_->get_pin());
 }
 
-void DLBusSensor::update() {
-  if (frame_ready_) {
-    ESP_LOGD(TAG, "DLBus frame received, decoding...");
-    parse_frame_();
-    bit_index_ = 0;
-    last_edge_ = micros();
-    attachInterruptArg(digitalPinToInterrupt(pin_), isr, this, CHANGE);
-    frame_ready_ = false;
-  }
+void DLBusSensor::loop() {
+  if (!frame_ready_) return;
+
+  ESP_LOGD(TAG, "DLBus frame received, decoding...");
+  compute_timing_stats_();
+  parse_frame_();
+
+  bit_index_ = 0;
+  frame_ready_ = false;
+  last_edge_ = micros();
+  attachInterruptArg(digitalPinToInterrupt(pin_->get_pin()), isr, this, CHANGE);
 }
 
 void DLBusSensor::set_temp_sensor(int index, sensor::Sensor *sensor) {
@@ -40,67 +40,56 @@ void DLBusSensor::set_relay_sensor(int index, binary_sensor::BinarySensor *senso
 
 void IRAM_ATTR DLBusSensor::isr(void *arg) {
   auto *self = static_cast<DLBusSensor *>(arg);
-  unsigned long now = micros();
+  uint32_t now = micros();
   uint32_t duration = now - self->last_edge_;
-
-  // Adaptive Software-Entprellung
-  if (duration < (self->min_valid_timing_ / 2)) return;
-
   self->last_edge_ = now;
+
+  if (duration < 100) return;  // Entprellung: ignorieren
 
   if (self->bit_index_ < MAX_BITS) {
     self->timings_[self->bit_index_++] = duration;
   } else {
     self->frame_ready_ = true;
-    detachInterrupt(digitalPinToInterrupt(self->pin_));
+    detachInterrupt(digitalPinToInterrupt(self->pin_->get_pin()));
   }
 }
 
-void DLBusSensor::compute_timing_stats_(uint32_t &median, float &mean, float &stddev, uint32_t &min_t, uint32_t &max_t) {
+void DLBusSensor::compute_timing_stats_() {
   std::vector<uint32_t> sorted_timings(timings_, timings_ + bit_index_);
   std::sort(sorted_timings.begin(), sorted_timings.end());
 
-  min_t = UINT32_MAX;
-  max_t = 0;
-  uint64_t sum = 0;
-
-  for (uint32_t t : sorted_timings) {
-    min_t = std::min(min_t, t);
-    max_t = std::max(max_t, t);
-    sum += t;
+  uint32_t sum = 0, min = UINT32_MAX, max = 0;
+  for (int i = 0; i < bit_index_; i++) {
+    sum += sorted_timings[i];
+    if (sorted_timings[i] < min) min = sorted_timings[i];
+    if (sorted_timings[i] > max) max = sorted_timings[i];
   }
 
-  median = sorted_timings[bit_index_ / 2];
-  mean = static_cast<float>(sum) / bit_index_;
-
+  float mean = sum / float(bit_index_);
   float variance = 0;
-  for (auto t : sorted_timings)
-    variance += (t - mean) * (t - mean);
-  stddev = sqrt(variance / bit_index_);
+  for (int i = 0; i < bit_index_; i++)
+    variance += (sorted_timings[i] - mean) * (sorted_timings[i] - mean);
+  variance /= float(bit_index_);
+  float stddev = sqrtf(variance);
+  uint32_t median = sorted_timings[bit_index_ / 2];
 
-  // Histogramm der Bitlängen
-  const int BIN_COUNT = 10;
-  const uint32_t BIN_WIDTH = 2000;  // µs
-  int histogram[BIN_COUNT] = {0};
-  int overflows = 0;
-  
+  ESP_LOGI(TAG, "Bit timing – Min: %u µs, Max: %u µs, Median: %u µs, Mean: %.1f µs, StdDev: %.1f",
+           min, max, median, mean, stddev);
+
+  // Histogramm
+  const uint32_t bin_size = 2000;
+  uint32_t histogram[11] = {0};
   for (int i = 0; i < bit_index_; i++) {
-    uint32_t t = timings_[i];
-    int bin = t / BIN_WIDTH;
-    if (bin >= BIN_COUNT)
-      overflows++;
-    else
-      histogram[bin]++;
-}
+    int bin = timings_[i] / bin_size;
+    if (bin >= 10) bin = 10;
+    histogram[bin]++;
+  }
 
-// Ausgabe des Histogramms
-ESP_LOGI(TAG, "Bit Timing Histogram (Bin width: %u µs):", BIN_WIDTH);
-for (int i = 0; i < BIN_COUNT; i++) {
-  ESP_LOGI(TAG, "  %2u - %2u ms: %3d", i * 2, (i + 1) * 2 - 1, histogram[i]);
-}
-if (overflows > 0)
-  ESP_LOGI(TAG, "  >%u ms: %3d", BIN_COUNT * 2, overflows);
-  
+  ESP_LOGI(TAG, "Bit Timing Histogram (Bin width: %u µs):", bin_size);
+  for (int i = 0; i < 10; i++) {
+    ESP_LOGI(TAG, "  %2d - %2d ms: %3u", i * 2, i * 2 + 1, histogram[i]);
+  }
+  ESP_LOGI(TAG, "  >20 ms: %3u", histogram[10]);
 }
 
 void DLBusSensor::parse_frame_() {
@@ -109,15 +98,10 @@ void DLBusSensor::parse_frame_() {
     return;
   }
 
-  uint32_t median, min_t, max_t;
-  float mean, stddev;
-  compute_timing_stats_(median, mean, stddev, min_t, max_t);
-  this->min_valid_timing_ = min_t;
+  std::vector<uint32_t> sorted_timings(timings_, timings_ + bit_index_);
+  std::sort(sorted_timings.begin(), sorted_timings.end());
+  uint32_t threshold = sorted_timings[bit_index_ / 2];
 
-  ESP_LOGI(TAG, "Bit timing – Min: %u µs, Max: %u µs, Median: %u µs, Mean: %.1f µs, StdDev: %.1f",
-           min_t, max_t, median, mean, stddev);
-
-  uint32_t threshold = median;
   uint8_t raw_bytes[16] = {0};
   int byte_i = 0, bit_i = 0;
 
@@ -183,7 +167,7 @@ void DLBusSensor::parse_frame_() {
   uint8_t relays = raw_bytes[sync_offset + 12];
   for (int i = 0; i < 4; i++) {
     bool state = (relays >> i) & 0x01;
-    ESP_LOGI(TAG, "Relais[%d] = %s", i, state ? "ON" : "OFF");
+    ESP_LOGI(TAG, "Relay[%d] = %s", i, state ? "ON" : "OFF");
     if (relay_sensors_[i] != nullptr)
       relay_sensors_[i]->publish_state(state);
   }

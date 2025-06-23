@@ -4,34 +4,78 @@ esp8266:
   board: d1_mini
 
 external_components:
-  - source:
-      type: local
-      path: ./components
-    components: [uvr64_dlbus]
+
   - source:
       type: git
       url: https://github.com/DerTolleMaz/esphome-uvr64
+      ref: component
+    components: [uvr64_dlbus]
 logger:
+
+globals:
+  - id: dlbus_ptr
+    type: esphome::uvr64_dlbus::DLBusSensor*
+    restore_value: no
+    initial_value: 'nullptr'
+
+# DL-Bus Temperatur- und Relais-Sensoren
+sensor:
+  - platform: template
+    name: "UVR64 Solarthermie"
+    id: temp0
+    unit_of_measurement: "°C"
+  - platform: template
+    name: "UVR64 Solarthermie Boiler"
+    id: temp1
+    unit_of_measurement: "°C"
+  - platform: template
+    name: "UVR64 Solarthermie Puffer Unten"
+    id: temp2
+    unit_of_measurement: "°C"
+  - platform: template
+    name: "UVR64 Solarthermie Pool Waermetauscher"
+    id: temp3
+    unit_of_measurement: "°C"
+  - platform: template
+    name: "UVR64 Heizung Pool Waermetauscher"
+    id: temp4
+    unit_of_measurement: "°C"
+  - platform: template
+    name: "UVR64 Solarthermie Puffer Oben"
+    id: temp5
+    unit_of_measurement: "°C"
 
 binary_sensor:
   - platform: template
-    name: "dummy"
-    lambda: |-
-      return false;
+    name: "UVR64 Relay Boiler"
+    id: relay0
+  - platform: template
+    name: "UVR64 Relay Puffer"
+    id: relay1
+  - platform: template
+    name: "UVR64 Relay Solarthermie Pool  Waermetauscher"
+    id: relay2
+  - platform: template
+    name: "UVR64 Relay Heizung Pool Waermetauscher"
+    id: relay3
 
-sensor:
-  - platform: uvr64_dlbus
-    id: uvr64_bus
-    pin: D1
-    temp_sensors:
-      - name: "Temp 1"
-      - name: "Temp 2"
-      - name: "Temp 3"
-      - name: "Temp 4"
-      - name: "Temp 5"
-      - name: "Temp 6"
-    relay_sensors:
-      - name: "Relais 1"
-      - name: "Relais 2"
-      - name: "Relais 3"
-      - name: "Relais 4"
+# DL-Bus-Komponente dynamisch erzeugen
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (id(dlbus_ptr) == nullptr) {
+            auto dl = new esphome::uvr64_dlbus::DLBusSensor(GPIO_NUM_4);
+            dl->set_temp_sensor(0, &id(temp0));
+            dl->set_temp_sensor(1, &id(temp1));
+            dl->set_temp_sensor(2, &id(temp2));
+            dl->set_temp_sensor(3, &id(temp3));
+            dl->set_temp_sensor(4, &id(temp4));
+            dl->set_temp_sensor(5, &id(temp5));
+            dl->set_relay_sensor(0, &id(relay0));
+            dl->set_relay_sensor(1, &id(relay1));
+            dl->set_relay_sensor(2, &id(relay2));
+            dl->set_relay_sensor(3, &id(relay3));
+            id(dlbus_ptr) = dl;
+            App.register_component(dl);
+          }
