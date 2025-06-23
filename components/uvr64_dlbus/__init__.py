@@ -1,32 +1,7 @@
-import esphome.codegen as cg
-import esphome.config_validation as cv
-from esphome import automation
-from esphome.components import sensor, binary_sensor
-from esphome.const import CONF_ID, CONF_PIN
+"""UVR64 DL-Bus component entry point."""
 
-uvr64_dlbus_ns = cg.esphome_ns.namespace("uvr64_dlbus")
-DLBusSensor = uvr64_dlbus_ns.class_("DLBusSensor", cg.Component)
+# Re-export everything from the implementation module so users can
+# `import uvr64_dlbus` and access the schema and helper functions.
 
-CONF_TEMP_SENSORS = "temp_sensors"
-CONF_RELAY_SENSORS = "relay_sensors"
+from .dlbus_sensor import *  # noqa: F401,F403
 
-CONFIG_SCHEMA = cv.Schema({
-    cv.GenerateID(): cv.declare_id(DLBusSensor),
-    cv.Required(CONF_PIN): cv.gpio_input_pin,
-    cv.Required(CONF_TEMP_SENSORS): cv.ensure_list(cv.use_id(sensor.Sensor)),
-    cv.Required(CONF_RELAY_SENSORS): cv.ensure_list(cv.use_id(binary_sensor.BinarySensor)),
-})
-
-async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
-    await cg.register_component(var, config)
-    pin = await cg.gpio_pin_expression(config[CONF_PIN])
-    cg.add(var.set_pin(pin))
-
-    for i, sens in enumerate(config[CONF_TEMP_SENSORS]):
-        sens_var = await cg.get_variable(sens)
-        cg.add(var.set_temp_sensor(i, sens_var))
-
-    for i, sens in enumerate(config[CONF_RELAY_SENSORS]):
-        sens_var = await cg.get_variable(sens)
-        cg.add(var.set_relay_sensor(i, sens_var))
