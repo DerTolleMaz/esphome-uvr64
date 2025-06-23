@@ -11,7 +11,9 @@ namespace uvr64_dlbus {
 
 class DLBusSensor : public Component {
  public:
+  DLBusSensor();
   explicit DLBusSensor(uint8_t pin);
+  void set_pin(uint8_t pin) { this->pin_ = pin; }
   void setup() override;
   void loop() override;
 
