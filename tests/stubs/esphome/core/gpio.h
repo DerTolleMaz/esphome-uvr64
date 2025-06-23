@@ -30,6 +30,10 @@ class InternalGPIOPin {
   virtual bool digital_read() { return false; }
   virtual void digital_write(bool) {}
   virtual ISRInternalGPIOPin to_isr() const { return ISRInternalGPIOPin(); }
+  template<typename T>
+  void attach_interrupt(void (*func)(T *), T *arg, gpio::InterruptType type) const {
+    this->attach_interrupt(reinterpret_cast<void (*)(void *)>(func), arg, type);
+  }
   virtual void attach_interrupt(void (*)(void *), void *, gpio::InterruptType) const {}
   virtual void detach_interrupt() const {}
   virtual uint8_t get_pin() const { return 0; }
