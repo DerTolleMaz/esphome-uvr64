@@ -54,6 +54,23 @@ Nutze `source: local` und `path: ./components` in deiner YAML-Datei.
 Installiere ESPHome und führe `esphome compile uvr64_dlbus.yaml` aus.
 PlatformIO alleine löst Abhängigkeiten wie `binary_sensor.h` nicht auf.
 
+## Tests
+
+Zum Kompilieren der Beispieltests wird ein C++-Compiler (z.B. `g++`) und
+`make` benötigt. Der Test `test_parse_frame` im Verzeichnis `tests` kann mit
+
+```bash
+make -C tests
+```
+
+gebaut und mit
+
+```bash
+make -C tests run
+```
+
+ausgeführt werden.
+
 ## Lizenz
 
 Dieses Projekt steht unter der MIT-Lizenz – siehe die Datei [LICENSE](LICENSE) für Details.
