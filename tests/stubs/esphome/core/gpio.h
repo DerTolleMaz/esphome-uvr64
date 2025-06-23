@@ -25,6 +25,9 @@ class ISRInternalGPIOPin {
 
 class InternalGPIOPin {
  public:
+  template<typename T> void attach_interrupt(void (*func)(T *), T *arg, gpio::InterruptType type) const {
+    this->attach_interrupt(reinterpret_cast<void (*)(void *)>(func), arg, type);
+  }
   virtual void setup() {}
   virtual void pin_mode(gpio::Flags) {}
   virtual bool digital_read() { return false; }

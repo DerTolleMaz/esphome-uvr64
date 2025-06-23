@@ -30,6 +30,7 @@ class DLBusSensor : public Component {
 
  protected:
   static void IRAM_ATTR isr(void *arg);
+  static void IRAM_ATTR isr_typed(DLBusSensor *arg);
   void parse_frame_();
   void compute_timing_stats_();
 

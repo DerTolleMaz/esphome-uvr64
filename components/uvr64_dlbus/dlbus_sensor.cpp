@@ -33,7 +33,7 @@ void DLBusSensor::setup() {
   if (this->pin_ != nullptr) {
     this->pin_->setup();
     this->pin_isr_ = this->pin_->to_isr();
-    this->pin_->attach_interrupt(DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
+    this->pin_->attach_interrupt(DLBusSensor::isr_typed, this, gpio::INTERRUPT_ANY_EDGE);
     ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", this->pin_->get_pin());
   } else {
     pinMode(pin_num_, INPUT);
@@ -52,7 +52,7 @@ void DLBusSensor::loop() {
     parse_frame_();
     compute_timing_stats_();
     if (this->pin_ != nullptr) {
-      this->pin_->attach_interrupt(DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
+      this->pin_->attach_interrupt(DLBusSensor::isr_typed, this, gpio::INTERRUPT_ANY_EDGE);
     } else {
       attachInterruptArg(digitalPinToInterrupt(pin_num_), &DLBusSensor::isr, this, CHANGE);
     }
@@ -67,6 +67,8 @@ void IRAM_ATTR DLBusSensor::isr(void *arg) {
   // TODO: Echtzeit-DL-Bus-Decoder hier implementieren.
   self->frame_buffer_ready_ = true;
 }
+
+void IRAM_ATTR DLBusSensor::isr_typed(DLBusSensor *arg) { DLBusSensor::isr(static_cast<void *>(arg)); }
 
 void DLBusSensor::parse_frame_() {
   std::array<uint8_t, 8> bytes{};
