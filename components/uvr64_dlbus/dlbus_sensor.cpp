@@ -3,6 +3,7 @@
 #include "esphome/core/log.h"
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace esphome {
 namespace uvr64_dlbus {
