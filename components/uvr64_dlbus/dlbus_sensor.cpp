@@ -1,6 +1,10 @@
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 
+#ifndef ARDUINO
+#include "arduino_stubs.h"
+#endif
+
 namespace esphome {
 namespace uvr64_dlbus {
 
