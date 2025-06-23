@@ -6,73 +6,76 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-DLBusSensor::DLBusSensor(uint8_t pin) : pin_(pin) {}
-
 void DLBusSensor::setup() {
-  pinMode(this->pin_, INPUT);
-  attachInterruptArg(digitalPinToInterrupt(this->pin_), &DLBusSensor::isr, this, CHANGE);
-  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", this->pin_);
+  pinMode(pin_, INPUT);
+  attachInterruptArg(digitalPinToInterrupt(pin_), &DLBusSensor::isr, this, CHANGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
 }
 
 void DLBusSensor::loop() {
-  // Hier ggf. implementieren: Dekodierung nach Timing-Analyse oder Trigger auf gültiges Frame
-  // Beispiel: alle x ms parse_frame_() aufrufen
-}
-
-void DLBusSensor::set_temp_sensor(uint8_t index, sensor::Sensor *sensor) {
-  if (index < 6) {
-    this->temp_sensors_[index] = sensor;
-  }
-}
-
-void DLBusSensor::set_relay_sensor(uint8_t index, binary_sensor::BinarySensor *sensor) {
-  if (index < 4) {
-    this->relay_sensors_[index] = sensor;
+  // Check if we have a complete frame
+  if (frame_buffer_ready_) {
+    detachInterrupt(digitalPinToInterrupt(pin_));  // Temporarily disable interrupt
+    compute_timing_stats_();                       // Optional: log or analyze bit timings
+    parse_frame_();                                // Parse the frame and publish results
+    frame_buffer_ready_ = false;
+    attachInterruptArg(digitalPinToInterrupt(pin_), &DLBusSensor::isr, this, CHANGE);  // Re-enable
   }
 }
 
 void IRAM_ATTR DLBusSensor::isr(void *arg) {
   auto *self = static_cast<DLBusSensor *>(arg);
   uint32_t now = micros();
-  uint32_t duration = now - self->last_interrupt_time_;
-  self->last_interrupt_time_ = now;
+  bool state = digitalRead(self->pin_);
+  uint32_t duration = now - self->last_edge_;
+  self->last_edge_ = now;
 
-  if (duration > 10000) {  // Beispielschwelle für neues Frame
-    self->bit_durations_.clear();
+  if (duration < self->debounce_us_) {
+    return;  // ignore bouncing
   }
 
-  self->bit_durations_.push_back(duration);
+  if (self->bit_index_ < sizeof(self->frame_buffer_) * 8) {
+    size_t byte_idx = self->bit_index_ / 8;
+    size_t bit_pos = self->bit_index_ % 8;
 
-  if (self->bit_durations_.size() > 256) {
-    self->bit_durations_.erase(self->bit_durations_.begin());  // Buffer begrenzen
+    if (state) {
+      self->frame_buffer_[byte_idx] |= (1 << bit_pos);
+    } else {
+      self->frame_buffer_[byte_idx] &= ~(1 << bit_pos);
+    }
+
+    self->timing_histogram_[std::min(duration / 10, 255u)]++;  // Bucket histogram (10 µs bins)
+    self->bit_index_++;
+
+    if (self->bit_index_ >= 64) {  // Example: fixed frame size
+      self->frame_buffer_ready_ = true;
+    }
   }
-}
-
-void DLBusSensor::compute_timing_stats_() {
-  if (bit_durations_.empty()) return;
-
-  uint32_t min = UINT32_MAX, max = 0, sum = 0;
-  for (auto &d : bit_durations_) {
-    if (d < min) min = d;
-    if (d > max) max = d;
-    sum += d;
-  }
-
-  uint32_t mean = sum / bit_durations_.size();
-
-  ESP_LOGI(TAG, "Bit Timing – Min: %u µs, Max: %u µs, Mean: %u µs", min, max, mean);
 }
 
 void DLBusSensor::parse_frame_() {
-  // Beispielhafte Umsetzung: Auswertung Frame-Bytes → Relais + Temperaturen
-  // Achtung: Diese Methode muss noch vollständig mit Dekodierlogik ergänzt werden
-
-  // Dummydaten (nur zur Demonstration):
-  if (this->temp_sensors_[0] != nullptr) {
-    this->temp_sensors_[0]->publish_state(42.0);
+  // Dummy parser: fill values with dummy data
+  for (int i = 0; i < 6; i++) {
+    if (temp_sensors_[i]) {
+      temp_sensors_[i]->publish_state(20.0 + i);
+    }
   }
-  if (this->relay_sensors_[0] != nullptr) {
-    this->relay_sensors_[0]->publish_state(true);
+
+  for (int i = 0; i < 4; i++) {
+    if (relay_sensors_[i]) {
+      relay_sensors_[i]->publish_state(i % 2 == 0);
+    }
+  }
+
+  ESP_LOGD(TAG, "Parsed DLBus frame (dummy values).");
+}
+
+void DLBusSensor::compute_timing_stats_() {
+  ESP_LOGI(TAG, "Bit length histogram:");
+  for (size_t i = 0; i < 256; i++) {
+    if (timing_histogram_[i] > 0) {
+      ESP_LOGI(TAG, "  %3zu0 µs: %u", i, timing_histogram_[i]);
+    }
   }
 }
 
