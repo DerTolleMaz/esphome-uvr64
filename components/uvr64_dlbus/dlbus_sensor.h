@@ -1,11 +1,3 @@
-#pragma once
-
-#include "esphome/core/component.h"
-#include "esphome/components/sensor/sensor.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
-
-namespace esphome {
-namespace uvr64_dlbus {
 
 class DLBusSensor : public Component {
  public:
@@ -14,21 +6,26 @@ class DLBusSensor : public Component {
   void setup() override;
   void loop() override;
 
-  void set_temp_sensor(uint8_t index, sensor::Sensor *sensor);
-  void set_relay_sensor(uint8_t index, binary_sensor::BinarySensor *sensor);
+  void set_temp_sensor(uint8_t index, sensor::Sensor *sensor) {
+    if (index < 6) this->temp_sensors_[index] = sensor;
+  }
+
+  void set_relay_sensor(uint8_t index, binary_sensor::BinarySensor *sensor) {
+    if (index < 4) this->relay_sensors_[index] = sensor;
+  }
 
  protected:
+  static void IRAM_ATTR isr(void *arg);
+
   void parse_frame_();
   void compute_timing_stats_();
 
-  static void IRAM_ATTR isr(void *arg);
-
   uint8_t pin_;
-  volatile uint32_t last_interrupt_time_{0};
-  std::vector<uint32_t> bit_durations_;
-  std::vector<uint8_t> frame_buffer_;
+
   sensor::Sensor *temp_sensors_[6]{};
   binary_sensor::BinarySensor *relay_sensors_[4]{};
+
+  // Hier kannst du weitere interne Variablen einbauen (Buffer etc.)
 };
 
 }  // namespace uvr64_dlbus
