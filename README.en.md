@@ -56,6 +56,21 @@ Use `source: local` and `path: ./components` in your YAML file to test locally.
 
 Install ESPHome and run `esphome compile uvr64_dlbus.yaml`.
 
+### Tests
+
+To compile the example tests you need a C++ compiler (e.g. `g++`) and `make`.
+Build the `test_parse_frame` binary from the `tests` directory with
+
+```bash
+make -C tests
+```
+
+and run it with
+
+```bash
+make -C tests run
+```
+
 ## License
 
 This project is licensed under the MIT License – see [LICENSE](LICENSE) for details.
