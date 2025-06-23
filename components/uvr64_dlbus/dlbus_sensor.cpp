@@ -14,6 +14,11 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
+DLBusSensor::DLBusSensor() : pin_(0) {
+  this->bit_index_ = 0;
+  this->timings_.fill(0);
+}
+
 DLBusSensor::DLBusSensor(uint8_t pin) : pin_(pin) {
   this->bit_index_ = 0;
   this->timings_.fill(0);
