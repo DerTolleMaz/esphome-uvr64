@@ -14,28 +14,48 @@ namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-DLBusSensor::DLBusSensor() : pin_(0) {
+DLBusSensor::DLBusSensor() {
   this->bit_index_ = 0;
   this->timings_.fill(0);
 }
 
-DLBusSensor::DLBusSensor(uint8_t pin) : pin_(pin) {
+DLBusSensor::DLBusSensor(uint8_t pin) : pin_num_(pin) {
+  this->bit_index_ = 0;
+  this->timings_.fill(0);
+}
+
+DLBusSensor::DLBusSensor(InternalGPIOPin *pin) : pin_(pin) {
   this->bit_index_ = 0;
   this->timings_.fill(0);
 }
 
 void DLBusSensor::setup() {
-  pinMode(pin_, INPUT);
-  attachInterruptArg(digitalPinToInterrupt(pin_), &DLBusSensor::isr, this, CHANGE);
-  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_);
+  if (this->pin_ != nullptr) {
+    this->pin_->setup();
+    this->pin_isr_ = this->pin_->to_isr();
+    this->pin_->attach_interrupt(DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
+    ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", this->pin_->get_pin());
+  } else {
+    pinMode(pin_num_, INPUT);
+    attachInterruptArg(digitalPinToInterrupt(pin_num_), &DLBusSensor::isr, this, CHANGE);
+    ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_num_);
+  }
 }
 
 void DLBusSensor::loop() {
   if (frame_buffer_ready_) {
-    detachInterrupt(digitalPinToInterrupt(pin_));
+    if (this->pin_ != nullptr) {
+      this->pin_->detach_interrupt();
+    } else {
+      detachInterrupt(digitalPinToInterrupt(pin_num_));
+    }
     parse_frame_();
     compute_timing_stats_();
-    attachInterruptArg(digitalPinToInterrupt(pin_), &DLBusSensor::isr, this, CHANGE);
+    if (this->pin_ != nullptr) {
+      this->pin_->attach_interrupt(DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
+    } else {
+      attachInterruptArg(digitalPinToInterrupt(pin_num_), &DLBusSensor::isr, this, CHANGE);
+    }
     frame_buffer_ready_ = false;
     bit_index_ = 0;
     timings_.fill(0);
