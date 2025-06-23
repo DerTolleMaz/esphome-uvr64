@@ -1,3 +1,5 @@
+**Language:** [Deutsch](README.md) | [English](README.en.md)
+
 # UVR64 DL-Bus für ESPHome
 
 Diese Komponente liest den DL-Bus eines UVR64-Reglers mit einem D1 Mini (ESP8266) aus.
