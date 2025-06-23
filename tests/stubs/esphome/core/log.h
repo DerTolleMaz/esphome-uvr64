@@ -3,6 +3,7 @@
 #define ESP_LOGI(tag, ...)
 #define ESP_LOGCONFIG(tag, ...)
 #define ESP_LOGV(tag, ...)
+#define ESP_LOGW(tag, ...)
 #define ESP_LOGE(tag, ...)
 #ifndef IRAM_ATTR
 #define IRAM_ATTR
