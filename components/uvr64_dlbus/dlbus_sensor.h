@@ -1,34 +1,32 @@
 #pragma once
 
+#include "esphome.h"
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
-#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/core/gpio.h"
 
 namespace esphome {
 namespace uvr64_dlbus {
 
 class DLBusSensor : public Component {
  public:
-  void set_pin(uint8_t pin) { this->pin_ = pin; }
+  DLBusSensor();
 
-  void set_temp_sensor(int index, sensor::Sensor *sensor);
-  void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
+  void set_pin(uint8_t pin);
+  void set_temp_sensor(uint8_t index, sensor::Sensor *sensor);
+  void set_relay_sensor(uint8_t index, binary_sensor::BinarySensor *sensor);
 
   void setup() override;
   void loop() override;
 
  protected:
+  static void IRAM_ATTR isr(void *arg);
   void compute_timing_stats_();
   void parse_frame_();
-  static void IRAM_ATTR isr(void *arg);
 
   uint8_t pin_;
-  static const int MAX_BITS = 128;
-  volatile uint32_t timings_[MAX_BITS];
-  volatile int bit_index_ = 0;
-  volatile bool frame_ready_ = false;
-  unsigned long last_edge_ = 0;
-
+  volatile uint32_t last_change_us_{0};
+  std::vector<uint32_t> bit_durations_;
   sensor::Sensor *temp_sensors_[6] = {nullptr};
   binary_sensor::BinarySensor *relay_sensors_[4] = {nullptr};
 };
