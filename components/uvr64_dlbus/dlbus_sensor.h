@@ -42,6 +42,7 @@ class DLBusSensor : public Component {
   sensor::Sensor *temp_sensors_[6]{};
   binary_sensor::BinarySensor *relay_sensors_[4]{};
   volatile bool frame_buffer_ready_ = false;
+  volatile uint32_t last_change_{0};
   uint16_t timing_histogram_[64]{};
 };
 

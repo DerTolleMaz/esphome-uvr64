@@ -66,8 +66,23 @@ void DLBusSensor::loop() {
 
 void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
   auto *self = arg;
-  // TODO: Echtzeit-DL-Bus-Decoder hier implementieren.
-  self->frame_buffer_ready_ = true;
+  uint32_t now = micros();
+
+  if (self->bit_index_ == 0) {
+    self->last_change_ = now;
+    return;
+  }
+
+  uint32_t delta = now - self->last_change_;
+  self->last_change_ = now;
+  if (self->bit_index_ < DLBusSensor::MAX_BITS) {
+    self->timings_[self->bit_index_++] = static_cast<uint8_t>(std::min(delta, 255u));
+    if (self->bit_index_ >= DLBusSensor::MAX_BITS) {
+      self->frame_buffer_ready_ = true;
+    }
+  } else {
+    self->frame_buffer_ready_ = true;
+  }
 }
 
 void DLBusSensor::parse_frame_() {
