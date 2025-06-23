@@ -3,6 +3,7 @@
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/core/gpio.h"
 #include <array>
 #include <cstddef>
 
@@ -13,7 +14,9 @@ class DLBusSensor : public Component {
  public:
   DLBusSensor();
   explicit DLBusSensor(uint8_t pin);
-  void set_pin(uint8_t pin) { this->pin_ = pin; }
+  explicit DLBusSensor(InternalGPIOPin *pin);
+  void set_pin(uint8_t pin) { this->pin_num_ = pin; }
+  void set_pin(InternalGPIOPin *pin) { this->pin_ = pin; }
   void setup() override;
   void loop() override;
 
@@ -30,7 +33,9 @@ class DLBusSensor : public Component {
   void parse_frame_();
   void compute_timing_stats_();
 
-  uint8_t pin_;
+  uint8_t pin_num_{0};
+  InternalGPIOPin *pin_{nullptr};
+  ISRInternalGPIOPin pin_isr_;
   static constexpr size_t MAX_BITS = 128;
   std::array<uint8_t, MAX_BITS> timings_{};
   size_t bit_index_ = 0;

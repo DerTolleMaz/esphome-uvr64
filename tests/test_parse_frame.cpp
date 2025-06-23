@@ -22,7 +22,7 @@ static void encode_byte(TestDLBusSensor &sensor, uint8_t value) {
 }
 
 int main() {
-  TestDLBusSensor sensor(0);
+  TestDLBusSensor sensor(static_cast<uint8_t>(0));
 
   esphome::sensor::Sensor temps[6];
   esphome::binary_sensor::BinarySensor relays[4];
