@@ -9,7 +9,7 @@ namespace uvr64_dlbus {
 
 class DLBusSensor : public Component {
  public:
-  void set_pin(uint8_t pin) { pin_ = pin; }
+  void set_pin(uint8_t pin) { this->pin_ = pin; }
 
   void set_temp_sensor(int index, sensor::Sensor *sensor);
   void set_relay_sensor(int index, binary_sensor::BinarySensor *sensor);
