@@ -3,6 +3,8 @@
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include <array>
+#include <cstddef>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -27,6 +29,9 @@ class DLBusSensor : public Component {
   void compute_timing_stats_();
 
   uint8_t pin_;
+  static constexpr size_t MAX_BITS = 128;
+  std::array<uint8_t, MAX_BITS> timings_{};
+  size_t bit_index_ = 0;
   sensor::Sensor *temp_sensors_[6]{};
   binary_sensor::BinarySensor *relay_sensors_[4]{};
   volatile bool frame_buffer_ready_ = false;
