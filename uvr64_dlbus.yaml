@@ -1,9 +1,5 @@
 esphome:
   name: uvr64_dlbus
-  includes:
-    - components/uvr64_dlbus/dlbus_sensor.h
-    - <dlbus_sensor.h>
-    - components/uvr64_dlbus/dlbus_sensor.cpp
 esp8266:
   board: d1_mini
 
