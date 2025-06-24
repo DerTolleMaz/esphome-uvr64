@@ -49,6 +49,22 @@ sensor:
     id: temp5
     unit_of_measurement: "°C"
 
+  - platform: uvr64_dlbus
+    id: uvr
+    pin: D2
+    temp_sensors:
+      - id(temp0)
+      - id(temp1)
+      - id(temp2)
+      - id(temp3)
+      - id(temp4)
+      - id(temp5)
+    relay_sensors:
+      - id(relay0)
+      - id(relay1)
+      - id(relay2)
+      - id(relay3)
+
 binary_sensor:
   - platform: template
     name: "UVR64 Relay Boiler"
@@ -69,7 +85,7 @@ interval:
     then:
       - lambda: |-
           if (id(dlbus_ptr) == nullptr) {
-            auto dl = new esphome::uvr64_dlbus::DLBusSensor(4);
+            auto dl = new esphome::uvr64_dlbus::DLBusSensor(id(uvr)->get_pin());
             dl->set_temp_sensor(0, id(temp0));
             dl->set_temp_sensor(1, id(temp1));
             dl->set_temp_sensor(2, id(temp2));
