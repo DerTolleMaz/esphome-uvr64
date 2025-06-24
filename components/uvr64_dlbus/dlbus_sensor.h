@@ -17,6 +17,7 @@ class DLBusSensor : public Component {
   explicit DLBusSensor(InternalGPIOPin *pin);
   void set_pin(uint8_t pin) { this->pin_num_ = pin; }
   void set_pin(InternalGPIOPin *pin) { this->pin_ = pin; }
+  uint8_t get_pin() const;
   void setup() override;
   void loop() override;
 

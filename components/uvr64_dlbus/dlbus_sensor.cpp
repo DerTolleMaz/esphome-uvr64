@@ -29,6 +29,13 @@ DLBusSensor::DLBusSensor(InternalGPIOPin *pin) : pin_(pin) {
   this->timings_.fill(0);
 }
 
+uint8_t DLBusSensor::get_pin() const {
+  if (this->pin_ != nullptr) {
+    return this->pin_->get_pin();
+  }
+  return this->pin_num_;
+}
+
 void DLBusSensor::setup() {
   if (this->pin_ != nullptr) {
     this->pin_->setup();
