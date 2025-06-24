@@ -16,54 +16,39 @@ external_components:
     components: [uvr64_dlbus]
 logger:
 
+external_components:
+  - source:
+      type: git
+      url: https://github.com/DerTolleMaz/esphome-uvr64
+      ref: main
+    components: [uvr64_dlbus]
+    refresh: always
 globals:
   - id: dlbus_ptr
     type: esphome::uvr64_dlbus::DLBusSensor*
     restore_value: no
     initial_value: 'nullptr'
-
-# DL-Bus Temperatur- und Relais-Sensoren
+    #includes: ["uvr64_dlbus/dlbus_sensor.h"]
+# Sensoren deklarieren
 sensor:
   - platform: template
     name: "UVR64 Solarthermie"
     id: temp0
-    unit_of_measurement: "°C"
   - platform: template
     name: "UVR64 Solarthermie Boiler"
     id: temp1
-    unit_of_measurement: "°C"
   - platform: template
     name: "UVR64 Solarthermie Puffer Unten"
     id: temp2
-    unit_of_measurement: "°C"
   - platform: template
     name: "UVR64 Solarthermie Pool Waermetauscher"
     id: temp3
-    unit_of_measurement: "°C"
   - platform: template
     name: "UVR64 Heizung Pool Waermetauscher"
     id: temp4
-    unit_of_measurement: "°C"
   - platform: template
     name: "UVR64 Solarthermie Puffer Oben"
     id: temp5
-    unit_of_measurement: "°C"
-
-  - platform: uvr64_dlbus
-    id: uvr
-    pin: D2
-    temp_sensors:
-      - id(temp0)
-      - id(temp1)
-      - id(temp2)
-      - id(temp3)
-      - id(temp4)
-      - id(temp5)
-    relay_sensors:
-      - id(relay0)
-      - id(relay1)
-      - id(relay2)
-      - id(relay3)
 
 binary_sensor:
   - platform: template
@@ -73,13 +58,28 @@ binary_sensor:
     name: "UVR64 Relay Puffer"
     id: relay1
   - platform: template
-    name: "UVR64 Relay Solarthermie Pool  Waermetauscher"
+    name: "UVR64 Relay Solarthermie Pool Waermetauscher"
     id: relay2
   - platform: template
     name: "UVR64 Relay Heizung Pool Waermetauscher"
     id: relay3
 
-# DL-Bus-Komponente dynamisch erzeugen
+# DL-Bus-Komponente
+uvr64_dlbus:
+  id: uvr
+  pin: D2
+  temp_sensors:
+    - temp0
+    - temp1
+    - temp2
+    - temp3
+    - temp4
+    - temp5
+  relay_sensors:
+    - relay0
+    - relay1
+    - relay2
+    - relay3
 interval:
   - interval: 1s
     then:
@@ -99,3 +99,4 @@ interval:
             id(dlbus_ptr) = dl;
             App.register_component(dl);
           }
+
