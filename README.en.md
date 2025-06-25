@@ -45,8 +45,17 @@ sensor:
       - name: "Relay 1"
       - name: "Relay 2"
       - name: "Relay 3"
-      - name: "Relay 4"
+  - name: "Relay 4"
 ```
+
+## Hardware
+
+The UVR64 DL bus is a 24 V open‑drain line. It needs a pull‑up resistor to 24 V
+and must be level shifted for a 3.3 V microcontroller such as the ESP8266. One
+simple circuit uses an NPN transistor with a pull‑up to 3.3 V on the collector
+and a voltage divider on the bus side (e.g. 22 kΩ/4.7 kΩ). The UVR64
+specification states a bit frequency of 50 Hz, so each bit lasts 20 ms and edge
+timing is critical.
 
 ### Local test
 
