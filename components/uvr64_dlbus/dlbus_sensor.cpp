@@ -93,7 +93,7 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
-  std::array<uint8_t, 8> bytes{};
+  std::array<uint8_t, 20> bytes{};
   size_t bit_pos = 0;
   for (size_t i = 0; i + 1 < bit_index_ && bit_pos < bytes.size() * 8; i += 2) {
     bool bit = timings_[i] < timings_[i + 1];
@@ -102,7 +102,7 @@ void DLBusSensor::parse_frame_() {
     bit_pos++;
   }
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 6; i++) {
     uint8_t high = bytes[2 * i];
     uint8_t low = bytes[2 * i + 1];
     int16_t raw = static_cast<int16_t>((high << 8) | low);
@@ -111,9 +111,11 @@ void DLBusSensor::parse_frame_() {
     }
   }
 
+  uint8_t relay_byte = bytes[12];
   for (int i = 0; i < 4; i++) {
+    bool state = (relay_byte >> i) & 0x01;
     if (this->relay_sensors_[i]) {
-      this->relay_sensors_[i]->publish_state(false);
+      this->relay_sensors_[i]->publish_state(state);
     }
   }
 
