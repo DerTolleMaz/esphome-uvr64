@@ -37,7 +37,7 @@ class DLBusSensor : public Component {
   uint8_t pin_num_{0};
   InternalGPIOPin *pin_{nullptr};
   ISRInternalGPIOPin pin_isr_;
-  static constexpr size_t MAX_BITS = 128;
+  static constexpr size_t MAX_BITS = 320;
   std::array<uint8_t, MAX_BITS> timings_{};
   size_t bit_index_ = 0;
   sensor::Sensor *temp_sensors_[6]{};
