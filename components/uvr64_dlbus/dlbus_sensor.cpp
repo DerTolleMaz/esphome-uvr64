@@ -54,6 +54,10 @@ void DLBusSensor::setup() {
 }
 
 void DLBusSensor::loop() {
+  uint32_t now = micros();
+  if (!frame_buffer_ready_ && bit_index_ > 0 && (now - last_change_) > FRAME_TIMEOUT_US) {
+    frame_buffer_ready_ = true;
+  }
   if (frame_buffer_ready_) {
     ESP_LOGD(TAG, "Processing frame with %d bits", bit_index_);
     if (this->pin_ != nullptr) {
@@ -75,22 +79,24 @@ void DLBusSensor::loop() {
     timings_.fill(0);
     levels_.fill(0);
   } else if (bit_index_ > 0) {
-    ESP_LOGD(TAG, "Incomplete frame with %d bits", bit_index_);
-    if (this->pin_ != nullptr) {
-      this->pin_->detach_interrupt();
-    } else {
-      detachInterrupt(digitalPinToInterrupt(pin_num_));
+    if ((now - last_change_) > FRAME_TIMEOUT_US) {
+      ESP_LOGD(TAG, "Incomplete frame with %d bits", bit_index_);
+      if (this->pin_ != nullptr) {
+        this->pin_->detach_interrupt();
+      } else {
+        detachInterrupt(digitalPinToInterrupt(pin_num_));
+      }
+      dump_signal_();
+      if (this->pin_ != nullptr) {
+        this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
+      } else {
+        attachInterruptArg(digitalPinToInterrupt(pin_num_),
+                          reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
+      }
+      bit_index_ = 0;
+      timings_.fill(0);
+      levels_.fill(0);
     }
-    dump_signal_();
-    if (this->pin_ != nullptr) {
-      this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
-    } else {
-      attachInterruptArg(digitalPinToInterrupt(pin_num_),
-                        reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
-    }
-    bit_index_ = 0;
-    timings_.fill(0);
-    levels_.fill(0);
   }
 }
 
