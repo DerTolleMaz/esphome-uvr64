@@ -95,7 +95,7 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
 
 void DLBusSensor::parse_frame_() {
   ESP_LOGD(TAG, "Start parsing frame with %d bits", bit_index_);
-  std::array<uint8_t, 8> bytes{};
+  std::array<uint8_t, 16> bytes{};
   size_t bit_pos = 0;
   for (size_t i = 0; i + 1 < bit_index_ && bit_pos < bytes.size() * 8; i += 2) {
     bool bit = timings_[i] < timings_[i + 1];
@@ -104,10 +104,13 @@ void DLBusSensor::parse_frame_() {
     bit_pos++;
   }
 
-  ESP_LOGD(TAG, "Raw bytes: %02X %02X %02X %02X %02X %02X %02X %02X", bytes[0],
-           bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]);
+  ESP_LOGD(TAG,
+           "Raw bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
+           bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+           bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
+           bytes[13], bytes[14], bytes[15]);
 
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 6; i++) {
     uint8_t high = bytes[2 * i];
     uint8_t low = bytes[2 * i + 1];
     int16_t raw = static_cast<int16_t>((high << 8) | low);
@@ -118,9 +121,11 @@ void DLBusSensor::parse_frame_() {
   }
 
   for (int i = 0; i < 4; i++) {
+    uint8_t val = bytes[12 + i];
+    bool state = val != 0;
     if (this->relay_sensors_[i]) {
-      this->relay_sensors_[i]->publish_state(false);
-      ESP_LOGD(TAG, "Relay %d: %s", i, "off");
+      this->relay_sensors_[i]->publish_state(state);
+      ESP_LOGD(TAG, "Relay %d: %s", i, state ? "on" : "off");
     }
   }
 
