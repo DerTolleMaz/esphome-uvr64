@@ -47,6 +47,16 @@ sensor:
       - name: "Relais 4"
 ```
 
+## Hardware
+
+Der DL-Bus des UVR64 arbeitet offen kollektor mit 24 V. Die Leitung muss über
+einen Pull‑Up‑Widerstand auf 24 V gehalten werden. Zum Anschluss an den
+3,3‑V‑Eingang eines ESP8266 ist daher eine Pegelanpassung nötig. Ein möglicher
+Aufbau besteht aus einem NPN-Transistor mit Pull‑Up auf 3,3 V und einem
+Spannungsteiler (z. B. 22 kΩ/4,7 kΩ) am Bus. Laut Spezifikation beträgt die
+Bitfrequenz 50 Hz, also 20 ms pro Bit, sodass die Flanken präzise erfasst werden
+müssen.
+
 ## Lokaler Test
 
 Nutze `source: local` und `path: ./components` in deiner YAML-Datei.
