@@ -32,6 +32,13 @@ class DLBusSensor : public Component {
       relay_sensors_[index] = sensor;
   }
 
+void set_pin(InternalGPIOPin *pin) {
+  this->pin_ = pin;
+}
+
+void set_pin(uint8_t pin) {
+  this->pin_num_ = pin;
+}
  protected:
   static void IRAM_ATTR isr(DLBusSensor *arg);
 
