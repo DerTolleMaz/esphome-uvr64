@@ -39,12 +39,14 @@ class DLBusSensor : public Component {
   ISRInternalGPIOPin pin_isr_;
   static constexpr size_t MAX_BITS = 128;
   std::array<uint8_t, MAX_BITS> timings_{};
+  std::array<uint8_t, MAX_BITS> levels_{};
   size_t bit_index_ = 0;
   sensor::Sensor *temp_sensors_[6]{};
   binary_sensor::BinarySensor *relay_sensors_[4]{};
   volatile bool frame_buffer_ready_ = false;
   volatile uint32_t last_change_{0};
   uint16_t timing_histogram_[64]{};
+  void dump_signal_();
 };
 
 }  // namespace uvr64_dlbus

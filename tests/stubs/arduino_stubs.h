@@ -3,6 +3,7 @@ extern "C" {
 static inline void pinMode(unsigned char, int) {}
 static inline unsigned long micros() { return 0; }
 static inline int digitalPinToInterrupt(int pin) { return pin; }
+static inline int digitalRead(int) { return 0; }
 static inline void attachInterruptArg(int, void (*)(void *), void *, int) {}
 static inline void detachInterrupt(int) {}
 }
