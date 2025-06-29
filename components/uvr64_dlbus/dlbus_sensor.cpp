@@ -17,16 +17,19 @@ static const char *const TAG = "uvr64_dlbus";
 DLBusSensor::DLBusSensor() {
   this->bit_index_ = 0;
   this->timings_.fill(0);
+  this->levels_.fill(0);
 }
 
 DLBusSensor::DLBusSensor(uint8_t pin) : pin_num_(pin) {
   this->bit_index_ = 0;
   this->timings_.fill(0);
+  this->levels_.fill(0);
 }
 
 DLBusSensor::DLBusSensor(InternalGPIOPin *pin) : pin_(pin) {
   this->bit_index_ = 0;
   this->timings_.fill(0);
+  this->levels_.fill(0);
 }
 
 uint8_t DLBusSensor::get_pin() const {
@@ -58,6 +61,7 @@ void DLBusSensor::loop() {
     } else {
       detachInterrupt(digitalPinToInterrupt(pin_num_));
     }
+    dump_signal_();
     parse_frame_();
     compute_timing_stats_();
     if (this->pin_ != nullptr) {
@@ -69,22 +73,32 @@ void DLBusSensor::loop() {
     frame_buffer_ready_ = false;
     bit_index_ = 0;
     timings_.fill(0);
+    levels_.fill(0);
   }
 }
 
 void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
   auto *self = arg;
   uint32_t now = micros();
+  bool level = false;
+  if (self->pin_ != nullptr) {
+    level = self->pin_isr_.digital_read();
+  } else {
+    level = digitalRead(self->pin_num_);
+  }
 
   if (self->bit_index_ == 0) {
     self->last_change_ = now;
+    self->levels_[self->bit_index_] = level;
     return;
   }
 
   uint32_t delta = now - self->last_change_;
   self->last_change_ = now;
   if (self->bit_index_ < DLBusSensor::MAX_BITS) {
-    self->timings_[self->bit_index_++] = static_cast<uint8_t>(std::min(delta, 255u));
+    self->timings_[self->bit_index_] = static_cast<uint8_t>(std::min(delta, 255u));
+    self->levels_[self->bit_index_] = level;
+    self->bit_index_++;
     if (self->bit_index_ >= DLBusSensor::MAX_BITS) {
       self->frame_buffer_ready_ = true;
     }
@@ -130,6 +144,13 @@ void DLBusSensor::parse_frame_() {
   }
 
   ESP_LOGD(TAG, "Parsed DLBus frame from timings");
+}
+
+void DLBusSensor::dump_signal_() {
+  ESP_LOGI(TAG, "Captured signal:");
+  for (size_t i = 0; i < bit_index_; i++) {
+    ESP_LOGI(TAG, "  %3zu: level=%d time=%u", i, levels_[i], timings_[i]);
+  }
 }
 
 void DLBusSensor::compute_timing_stats_() {
