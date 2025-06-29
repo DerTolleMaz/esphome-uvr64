@@ -84,7 +84,7 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
   uint32_t delta = now - self->last_change_;
   self->last_change_ = now;
   if (self->bit_index_ < DLBusSensor::MAX_BITS) {
-    self->timings_[self->bit_index_++] = static_cast<uint8_t>(std::min(delta, 255u));
+    self->timings_[self->bit_index_++] = static_cast<uint16_t>(delta);
     if (self->bit_index_ >= DLBusSensor::MAX_BITS) {
       self->frame_buffer_ready_ = true;
     }

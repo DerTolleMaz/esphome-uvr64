@@ -13,11 +13,14 @@ class TestDLBusSensor : public DLBusSensor {
 };
 
 
+static const uint16_t SHORT_US = 300;
+static const uint16_t LONG_US = 600;
+
 static void encode_byte(TestDLBusSensor &sensor, uint8_t value) {
   for (int i = 7; i >= 0; --i) {
     bool bit = (value >> i) & 1;
-    sensor.timings_[sensor.bit_index_++] = bit ? 1 : 2;
-    sensor.timings_[sensor.bit_index_++] = bit ? 2 : 1;
+    sensor.timings_[sensor.bit_index_++] = bit ? SHORT_US : LONG_US;
+    sensor.timings_[sensor.bit_index_++] = bit ? LONG_US : SHORT_US;
   }
 }
 
