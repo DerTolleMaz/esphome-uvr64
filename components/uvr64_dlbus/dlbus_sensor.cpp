@@ -52,6 +52,7 @@ void DLBusSensor::setup() {
 
 void DLBusSensor::loop() {
   if (frame_buffer_ready_) {
+    ESP_LOGD(TAG, "Processing frame with %d bits", bit_index_);
     if (this->pin_ != nullptr) {
       this->pin_->detach_interrupt();
     } else {
@@ -93,6 +94,7 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
 }
 
 void DLBusSensor::parse_frame_() {
+  ESP_LOGD(TAG, "Start parsing frame with %d bits", bit_index_);
   std::array<uint8_t, 8> bytes{};
   size_t bit_pos = 0;
   for (size_t i = 0; i + 1 < bit_index_ && bit_pos < bytes.size() * 8; i += 2) {
@@ -102,18 +104,23 @@ void DLBusSensor::parse_frame_() {
     bit_pos++;
   }
 
+  ESP_LOGD(TAG, "Raw bytes: %02X %02X %02X %02X %02X %02X %02X %02X", bytes[0],
+           bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]);
+
   for (int i = 0; i < 4; i++) {
     uint8_t high = bytes[2 * i];
     uint8_t low = bytes[2 * i + 1];
     int16_t raw = static_cast<int16_t>((high << 8) | low);
     if (this->temp_sensors_[i]) {
       this->temp_sensors_[i]->publish_state(raw / 10.0f);
+      ESP_LOGD(TAG, "Temp %d: %.1f", i, raw / 10.0f);
     }
   }
 
   for (int i = 0; i < 4; i++) {
     if (this->relay_sensors_[i]) {
       this->relay_sensors_[i]->publish_state(false);
+      ESP_LOGD(TAG, "Relay %d: %s", i, "off");
     }
   }
 
@@ -121,6 +128,7 @@ void DLBusSensor::parse_frame_() {
 }
 
 void DLBusSensor::compute_timing_stats_() {
+  ESP_LOGD(TAG, "Computing timing stats for %d bits", bit_index_);
   std::fill(std::begin(timing_histogram_), std::end(timing_histogram_), 0);
   for (size_t i = 0; i < bit_index_; i++) {
     if (timings_[i] < 64) {
