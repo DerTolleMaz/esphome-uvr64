@@ -49,6 +49,8 @@ void DLBusSensor::setup() {
 
 void DLBusSensor::loop() {
   uint32_t now = micros();
+
+  // Wenn seit der letzten Flanke länger als FRAME_TIMEOUT vergangen ist → Frame fertig
   if (!frame_buffer_ready_ && bit_index_ > 0 && (now - last_change_) > FRAME_TIMEOUT_US) {
     frame_buffer_ready_ = true;
   }
@@ -56,14 +58,34 @@ void DLBusSensor::loop() {
   if (frame_buffer_ready_) {
     ESP_LOGD(TAG, "Processing frame with %d bits", bit_index_);
 
+    // 🛑 Sicherheits-Filter: Ignoriere Frames mit weniger als 100 Bits
+    if (bit_index_ < 100) {
+      ESP_LOGW(TAG, "Frame ignored – too short to be valid.");
+      // Signal-Dump für Debugging
+      std::string signal_dump;
+      for (size_t k = 0; k < bit_index_; k++) {
+        char buf[10];
+        snprintf(buf, sizeof(buf), "%d:%d ", timings_[k], levels_[k]);
+        signal_dump += buf;
+      }
+      ESP_LOGI(TAG, "Signal: %s", signal_dump.c_str());
+
+      frame_buffer_ready_ = false;
+      bit_index_ = 0;
+      return;
+    }
+
+    // Interrupt deaktivieren während Verarbeitung
     if (this->pin_ != nullptr) {
       this->pin_->detach_interrupt();
     } else {
       detachInterrupt(digitalPinToInterrupt(pin_num_));
     }
 
+    // 🔥 Verarbeitung des Frames
     parse_frame_();
 
+    // Interrupt wieder aktivieren
     if (this->pin_ != nullptr) {
       this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
     } else {
@@ -75,7 +97,6 @@ void DLBusSensor::loop() {
     bit_index_ = 0;
   }
 }
-
 void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
   uint32_t now = micros();
   uint8_t level = arg->pin_isr_.digital_read();
