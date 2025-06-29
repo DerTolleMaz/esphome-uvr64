@@ -1,13 +1,7 @@
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
 #include <algorithm>
-#ifdef UNIT_TEST
-#include "arduino_stubs.h"
-#endif
-
-#ifndef ARDUINO
-#include "arduino_stubs.h"
-#endif
+#include <vector>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -65,133 +59,69 @@ void DLBusSensor::loop() {
     } else {
       detachInterrupt(digitalPinToInterrupt(pin_num_));
     }
-    dump_signal_();
     parse_frame_();
-    compute_timing_stats_();
     if (this->pin_ != nullptr) {
       this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
     } else {
       attachInterruptArg(digitalPinToInterrupt(pin_num_),
-                        reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
+                         reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
     }
     frame_buffer_ready_ = false;
     bit_index_ = 0;
-    timings_.fill(0);
-    levels_.fill(0);
-  } else if (bit_index_ > 0) {
-    if ((now - last_change_) > FRAME_TIMEOUT_US) {
-      ESP_LOGD(TAG, "Incomplete frame with %d bits", bit_index_);
-      if (this->pin_ != nullptr) {
-        this->pin_->detach_interrupt();
-      } else {
-        detachInterrupt(digitalPinToInterrupt(pin_num_));
-      }
-      dump_signal_();
-      if (this->pin_ != nullptr) {
-        this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
-      } else {
-        attachInterruptArg(digitalPinToInterrupt(pin_num_),
-                          reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
-      }
-      bit_index_ = 0;
-      timings_.fill(0);
-      levels_.fill(0);
-    }
   }
 }
 
 void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
-  auto *self = arg;
   uint32_t now = micros();
-  bool level = false;
-  if (self->pin_ != nullptr) {
-    level = self->pin_isr_.digital_read();
-  } else {
-    level = digitalRead(self->pin_num_);
-  }
+  uint8_t level = arg->pin_isr_.digital_read();
+  uint32_t duration = now - arg->last_change_;
+  arg->last_change_ = now;
 
-  if (self->bit_index_ == 0) {
-    self->last_change_ = now;
-    self->levels_[self->bit_index_] = level;
-    return;
-  }
-
-  uint32_t delta = now - self->last_change_;
-  self->last_change_ = now;
-  if (self->bit_index_ < DLBusSensor::MAX_BITS) {
-    self->timings_[self->bit_index_] = static_cast<uint8_t>(std::min(delta, 255u));
-    self->levels_[self->bit_index_] = level;
-    self->bit_index_++;
-    if (self->bit_index_ >= DLBusSensor::MAX_BITS) {
-      self->frame_buffer_ready_ = true;
-    }
-  } else {
-    self->frame_buffer_ready_ = true;
+  if (arg->bit_index_ < MAX_BITS) {
+    arg->levels_[arg->bit_index_] = level;
+    arg->timings_[arg->bit_index_] = duration > 255 ? 255 : duration;
+    arg->bit_index_++;
   }
 }
 
 void DLBusSensor::parse_frame_() {
-  ESP_LOGD(TAG, "Start parsing frame with %d bits", bit_index_);
-  std::array<uint8_t, 16> bytes{};
+  std::vector<uint8_t> bytes;
   size_t bit_pos = 0;
-  for (size_t i = 0; i + 1 < bit_index_ && bit_pos < bytes.size() * 8; i += 2) {
+
+  // Manchester-Dekodierung
+  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
     bool bit = timings_[i] < timings_[i + 1];
-    bytes[bit_pos / 8] <<= 1;
-    bytes[bit_pos / 8] |= bit ? 1 : 0;
+    if (bit_pos % 8 == 0) {
+      bytes.push_back(0);
+    }
+    bytes.back() = (bytes.back() << 1) | (bit ? 1 : 0);
     bit_pos++;
   }
 
-  ESP_LOGD(TAG,
-           "Raw bytes: %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X",
-           bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
-           bytes[7], bytes[8], bytes[9], bytes[10], bytes[11], bytes[12],
-           bytes[13], bytes[14], bytes[15]);
+  if (bytes.size() < 8) {
+    ESP_LOGW(TAG, "Frame too short");
+    return;
+  }
 
-  for (int i = 0; i < 6; i++) {
-    uint8_t high = bytes[2 * i];
-    uint8_t low = bytes[2 * i + 1];
-    int16_t raw = static_cast<int16_t>((high << 8) | low);
-    if (this->temp_sensors_[i]) {
-      this->temp_sensors_[i]->publish_state(raw / 10.0f);
-      ESP_LOGD(TAG, "Temp %d: %.1f", i, raw / 10.0f);
+  // Startsequenz suchen (vier Null-Bytes)
+  size_t i = 0;
+  while (i + 4 < bytes.size()) {
+    if (bytes[i] == 0x00 && bytes[i + 1] == 0x00 &&
+        bytes[i + 2] == 0x00 && bytes[i + 3] == 0x00) {
+      break;
     }
+    i++;
   }
 
-  for (int i = 0; i < 4; i++) {
-    uint8_t val = bytes[12 + i];
-    bool state = val != 0;
-    if (this->relay_sensors_[i]) {
-      this->relay_sensors_[i]->publish_state(state);
-      ESP_LOGD(TAG, "Relay %d: %s", i, state ? "on" : "off");
-    }
+  if (i + 8 >= bytes.size()) {
+    ESP_LOGW(TAG, "No valid start sequence found");
+    return;
   }
 
-  ESP_LOGD(TAG, "Parsed DLBus frame from timings");
-}
+  size_t start = i + 4;
+  uint8_t sender = bytes[start];
+  uint8_t receiver = bytes[start + 1];
+  uint8_t telegram_type = bytes[start + 2];
+  uint8_t length = bytes[start + 3];
 
-void DLBusSensor::dump_signal_() {
-  ESP_LOGI(TAG, "Captured signal:");
-  for (size_t i = 0; i < bit_index_; i++) {
-    ESP_LOGI(TAG, "  %3zu: level=%d time=%u", i, levels_[i], timings_[i]);
-  }
-}
-
-void DLBusSensor::compute_timing_stats_() {
-  ESP_LOGD(TAG, "Computing timing stats for %d bits", bit_index_);
-  std::fill(std::begin(timing_histogram_), std::end(timing_histogram_), 0);
-  for (size_t i = 0; i < bit_index_; i++) {
-    if (timings_[i] < 64) {
-      timing_histogram_[timings_[i]]++;
-    }
-  }
-
-  ESP_LOGI(TAG, "Bit length histogram:");
-  for (int i = 0; i < 64; i++) {
-    if (timing_histogram_[i] > 0) {
-      ESP_LOGI(TAG, "  Length %d: %d samples", i, timing_histogram_[i]);
-    }
-  }
-}
-
-}  // namespace uvr64_dlbus
-}  // namespace esphome
+  if (start + 4 +
