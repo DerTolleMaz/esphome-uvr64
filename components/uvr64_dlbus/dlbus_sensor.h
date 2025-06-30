@@ -42,7 +42,8 @@ void set_pin(uint8_t pin) {
 }
  protected:
   static void IRAM_ATTR isr(DLBusSensor *arg);
-
+  void log_bits_();
+  void log_frame_(const std::vector<uint8_t> &frame);
   void parse_frame_();
 
   std::array<uint8_t, MAX_BITS> timings_;
