@@ -9,7 +9,7 @@
 namespace esphome {
 namespace uvr64_dlbus {
 
-static const uint32_t FRAME_TIMEOUT_US = 5000;
+static const uint32_t FRAME_TIMEOUT_US = 15000;
 static const size_t MAX_BITS = 512;
 
 class DLBusSensor : public Component {
