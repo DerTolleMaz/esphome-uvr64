@@ -8,12 +8,14 @@
 
 #include <array>
 #include <vector>
+#include <cstddef>
 
 namespace esphome {
 namespace uvr64_dlbus {
 
 static const uint32_t FRAME_TIMEOUT_US = 40000;  // 40 ms Frame-Timeout
 static const size_t MAX_BITS = 1024;              // Buffer size
+static const uint32_t HALF_BIT_US = 10000;        // 10 ms half bit
 
 class DLBusSensor : public Component {
  public:
@@ -34,8 +36,6 @@ class DLBusSensor : public Component {
   static void IRAM_ATTR isr(DLBusSensor *arg);
 
   void parse_frame_();
-  bool decode_manchester_(std::vector<bool> &bits, std::vector<uint8_t> &bytes);
-  bool find_sync_(const std::vector<bool> &bits, size_t &sync_pos);
   void log_bits_();
   void log_frame_(const std::vector<uint8_t> &frame);
 

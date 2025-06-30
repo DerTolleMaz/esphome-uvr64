@@ -1,5 +1,10 @@
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
+#ifdef ARDUINO
+#include <Arduino.h>
+#else
+#include "arduino_stubs.h"
+#endif
 
 #include <vector>
 #include <cstdio>
@@ -78,31 +83,34 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
 
   if (arg->bit_index_ < MAX_BITS) {
     arg->levels_[arg->bit_index_] = level;
-    arg->timings_[arg->bit_index_] = duration > 255 ? 255 : duration;
+    uint8_t units = (duration + HALF_BIT_US / 2) / HALF_BIT_US;
+    if (units == 0)
+      units = 1;
+    arg->timings_[arg->bit_index_] = units;
     arg->bit_index_++;
   }
 }
 
 void DLBusSensor::parse_frame_() {
-  std::vector<bool> bits;
-  for (size_t i = 0; i < bit_index_; i++) {
-    bits.push_back(levels_[i]);
-  }
-
-  size_t sync_pos = 0;
-  if (!find_sync_(bits, sync_pos)) {
-    ESP_LOGW(TAG, "No SYNC found!");
-    return;
-  }
-
-  ESP_LOGI(TAG, "SYNC found at bit %d", (int)sync_pos);
-
-  std::vector<bool> data_bits(bits.begin() + sync_pos + 16, bits.end());
-
   std::vector<uint8_t> bytes;
-  if (!decode_manchester_(data_bits, bytes)) {
-    ESP_LOGW(TAG, "Manchester decode failed");
-    return;
+  uint8_t current_byte = 0;
+  uint8_t bit_count = 0;
+
+  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
+    uint8_t first = timings_[i];
+    uint8_t second = timings_[i + 1];
+    if (first == second)
+      return;  // Invalid Manchester sequence
+
+    bool bit = first < second;
+    current_byte = (current_byte << 1) | (bit ? 1 : 0);
+    bit_count++;
+
+    if (bit_count == 8) {
+      bytes.push_back(current_byte);
+      current_byte = 0;
+      bit_count = 0;
+    }
   }
 
   log_frame_(bytes);
@@ -132,51 +140,11 @@ void DLBusSensor::parse_frame_() {
   }
 }
 
-bool DLBusSensor::find_sync_(const std::vector<bool> &bits, size_t &sync_pos) {
-  for (size_t i = 0; i + 16 < bits.size(); i++) {
-    bool sync = true;
-    for (size_t j = 0; j < 16; j++) {
-      if (!bits[i + j]) {
-        sync = false;
-        break;
-      }
-    }
-    if (sync) {
-      sync_pos = i;
-      return true;
-    }
-  }
-  return false;
-}
-
-bool DLBusSensor::decode_manchester_(std::vector<bool> &bits, std::vector<uint8_t> &bytes) {
-  if (bits.size() < 2)
-    return false;
-  size_t bit_pos = 0;
-  while (bit_pos + 1 < bits.size()) {
-    bool first = bits[bit_pos];
-    bool second = bits[bit_pos + 1];
-    bit_pos += 2;
-
-    if (first == second) {
-      ESP_LOGW(TAG, "Manchester error at bit %d-%d", (int)bit_pos - 2, (int)bit_pos - 1);
-      return false;
-    }
-
-    bool bit = !first && second;
-
-    if (bytes.empty() || (bit_pos / 2 - 1) % 8 == 0)
-      bytes.push_back(0);
-
-    bytes.back() = (bytes.back() << 1) | (bit ? 1 : 0);
-  }
-  return true;
-}
 
 void DLBusSensor::log_bits_() {
   std::string bitstring;
   for (size_t i = 0; i < bit_index_; i++) {
-    bitstring += levels_[i] ? '1' : '0';
+    bitstring += std::to_string(timings_[i]) + " ";
   }
   ESP_LOGI(TAG, "Bitstream (%d bits): %s", (int)bit_index_, bitstring.c_str());
 }
