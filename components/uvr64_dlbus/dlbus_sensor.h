@@ -21,6 +21,8 @@ class DLBusSensor : public Component {
 
   void setup() override;
   void loop() override;
+  void debug_decode_frame_();
+
   uint8_t get_pin() const;
 
   void set_temp_sensor(uint8_t index, sensor::Sensor *sensor) {
