@@ -2,6 +2,13 @@
 #include "esphome/core/log.h"
 #include <algorithm>
 #include <vector>
+#include <string>
+#include <cstdio>
+#if __has_include(<Arduino.h>)
+#include <Arduino.h>
+#else
+#include "arduino_stubs.h"
+#endif
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -124,75 +131,24 @@ void DLBusSensor::parse_frame_() {
     bit_pos++;
   }
 
-  if (bytes.size() < 8) {
+  if (bytes.size() < 16) {
     ESP_LOGW(TAG, "Frame too short");
     return;
   }
 
-  // Startsequenz suchen (vier Null-Bytes)
-  size_t i = 0;
-  while (i + 4 < bytes.size()) {
-    if (bytes[i] == 0x00 && bytes[i + 1] == 0x00 &&
-        bytes[i + 2] == 0x00 && bytes[i + 3] == 0x00) {
-      break;
-    }
-    i++;
-  }
-
-  if (i + 8 >= bytes.size()) {
-    ESP_LOGW(TAG, "No valid start sequence found");
-    return;
-  }
-
-  size_t start = i + 4;
-  uint8_t sender = bytes[start];
-  uint8_t receiver = bytes[start + 1];
-  uint8_t telegram_type = bytes[start + 2];
-  uint8_t length = bytes[start + 3];
-
-  if (start + 4 + length >= bytes.size()) {
-    ESP_LOGW(TAG, "Frame too short for expected length");
-    return;
-  }
-
-  uint8_t checksum = bytes[start + 4 + length];
-  uint8_t sum = 0;
-  for (size_t j = start; j < start + 4 + length; j++) {
-    sum += bytes[j];
-  }
-  sum %= 256;
-
-  if (sum != 0) {
-    ESP_LOGW(TAG, "Checksum failed");
-    return;
-  }
-
-  ESP_LOGI(TAG, "Valid telegram received: Type %02X", telegram_type);
-
-  // 🔥 Telegramm als Hex-Dump ausgeben
-  std::string telegram_str;
-  for (size_t j = start - 4; j <= start + 4 + length; j++) {
-    char buf[5];
-    snprintf(buf, sizeof(buf), "%02X ", bytes[j]);
-    telegram_str += buf;
-  }
-  ESP_LOGI(TAG, "Telegram: %s", telegram_str.c_str());
-
-  // Beispiel: Temperaturdaten
-  if (telegram_type == 0x10) {
-    for (int t = 0; t < 6; t++) {
-      uint8_t high = bytes[start + 4 + t * 2];
-      uint8_t low = bytes[start + 4 + t * 2 + 1];
-      int16_t raw = (high << 8) | low;
-      if (this->temp_sensors_[t]) {
-        this->temp_sensors_[t]->publish_state(raw / 10.0f);
-      }
+  // Temperature values (big endian high/low for each sensor)
+  for (int t = 0; t < 6; t++) {
+    uint8_t high = bytes[t * 2];
+    uint8_t low = bytes[t * 2 + 1];
+    int16_t raw = (static_cast<int16_t>(high) << 8) | low;
+    if (this->temp_sensors_[t]) {
+      this->temp_sensors_[t]->publish_state(raw / 10.0f);
     }
   }
 
-  // Relaisstatus
+  // Relay states follow after the six temperature pairs
   for (int r = 0; r < 4; r++) {
-    uint8_t val = bytes[start + 4 + 12 + r];
+    uint8_t val = bytes[12 + r];
     bool state = val != 0;
     if (this->relay_sensors_[r]) {
       this->relay_sensors_[r]->publish_state(state);
