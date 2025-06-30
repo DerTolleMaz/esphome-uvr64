@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <cstdio>
+
 #if __has_include(<Arduino.h>)
 #include <Arduino.h>
 #else
@@ -57,7 +58,6 @@ void DLBusSensor::setup() {
 void DLBusSensor::loop() {
   uint32_t now = micros();
 
-  // Wenn seit der letzten Flanke länger als FRAME_TIMEOUT vergangen ist → Frame fertig
   if (!frame_buffer_ready_ && bit_index_ > 0 && (now - last_change_) > FRAME_TIMEOUT_US) {
     frame_buffer_ready_ = true;
   }
@@ -65,34 +65,22 @@ void DLBusSensor::loop() {
   if (frame_buffer_ready_) {
     ESP_LOGD(TAG, "Processing frame with %d bits", bit_index_);
 
-    // 🛑 Sicherheits-Filter: Ignoriere Frames mit weniger als 100 Bits
     if (bit_index_ < 100) {
       ESP_LOGW(TAG, "Frame ignored – too short to be valid.");
-      // Signal-Dump für Debugging
-      std::string signal_dump;
-      for (size_t k = 0; k < bit_index_; k++) {
-        char buf[10];
-        snprintf(buf, sizeof(buf), "%d:%d ", timings_[k], levels_[k]);
-        signal_dump += buf;
-      }
-      ESP_LOGI(TAG, "Signal: %s", signal_dump.c_str());
-
+      log_bits_();
       frame_buffer_ready_ = false;
       bit_index_ = 0;
       return;
     }
 
-    // Interrupt deaktivieren während Verarbeitung
     if (this->pin_ != nullptr) {
       this->pin_->detach_interrupt();
     } else {
       detachInterrupt(digitalPinToInterrupt(pin_num_));
     }
 
-    // 🔥 Verarbeitung des Frames
     parse_frame_();
 
-    // Interrupt wieder aktivieren
     if (this->pin_ != nullptr) {
       this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
     } else {
@@ -104,6 +92,7 @@ void DLBusSensor::loop() {
     bit_index_ = 0;
   }
 }
+
 void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
   uint32_t now = micros();
   uint8_t level = arg->pin_isr_.digital_read();
@@ -115,6 +104,28 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
     arg->timings_[arg->bit_index_] = duration > 255 ? 255 : duration;
     arg->bit_index_++;
   }
+}
+
+void DLBusSensor::log_bits_() {
+  std::string out;
+  for (size_t i = 0; i < bit_index_; i++) {
+    out += levels_[i] ? '1' : '0';
+    if ((i + 1) % 8 == 0)
+      out += ' ';
+  }
+  ESP_LOGI(TAG, "Bits: %s", out.c_str());
+}
+
+void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
+  std::string out;
+  for (size_t i = 0; i < frame.size(); i++) {
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02X ", frame[i]);
+    out += buf;
+    if ((i + 1) % 8 == 0)
+      out += '\n';
+  }
+  ESP_LOGI(TAG, "Frame Bytes:\n%s", out.c_str());
 }
 
 void DLBusSensor::parse_frame_() {
@@ -131,25 +142,30 @@ void DLBusSensor::parse_frame_() {
     bit_pos++;
   }
 
+  log_frame_(bytes);
+
   if (bytes.size() < 16) {
     ESP_LOGW(TAG, "Frame too short");
     return;
   }
 
-  // Temperature values (big endian high/low for each sensor)
+  // Temperatur-Daten (Little Endian: Low + High)
   for (int t = 0; t < 6; t++) {
-    uint8_t high = bytes[t * 2];
     uint8_t low = bytes[t * 2 + 1];
+    uint8_t high = bytes[t * 2];
     int16_t raw = (static_cast<int16_t>(high) << 8) | low;
+    float temp = raw / 10.0f;
     if (this->temp_sensors_[t]) {
-      this->temp_sensors_[t]->publish_state(raw / 10.0f);
+      ESP_LOGI(TAG, "Temperature Sensor %d: %.1f°C (Raw: %d)", t, temp, raw);
+      this->temp_sensors_[t]->publish_state(temp);
     }
   }
 
-  // Relay states follow after the six temperature pairs
+  // Relais-Daten
   for (int r = 0; r < 4; r++) {
     uint8_t val = bytes[12 + r];
     bool state = val != 0;
+    ESP_LOGI(TAG, "Relay %d: %s (Raw: %d)", r, state ? "ON" : "OFF", val);
     if (this->relay_sensors_[r]) {
       this->relay_sensors_[r]->publish_state(state);
     }
