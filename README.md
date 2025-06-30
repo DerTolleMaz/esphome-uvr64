@@ -1,4 +1,4 @@
-**Language:** [Deutsch](README.md) | [English](README.en.md)
+md**Language:** [Deutsch](README.md) | [English](README.en.md)
 
 # ESPHome UVR64 DL-Bus Decoder
 
@@ -29,6 +29,51 @@ Dies ist ein ESPHome-Komponentenprojekt zur direkten Dekodierung des DL-Bus-Prot
 | **SYNC Start** | 16 × HIGH → 320 ms HIGH         | 16 Bits                     |
 | **Datenbytes** | 1 Startbit (0) + 8 Datenbits (LSB first) + 1 Stopbit (1) | 10 Bits / 200 ms pro Byte |
 | **SYNC Ende**  | 16 × HIGH                       | 16 Bits                     |
+
+---
+
+## 🗂️ Datenstruktur
+
+| Byte-Nr. | Feld           | Beschreibung                                  |
+|-----------|----------------|-----------------------------------------------|
+| 0         | SYNC           | 16 HIGH Bits ohne Start/Stop                 |
+| 1         | Gerätekennung  | 0x20                                          |
+| 2–3       | Temp1          | Temperatur 1 (Low + High Byte)               |
+| 4–5       | Temp2          | Temperatur 2                                 |
+| 6–7       | Temp3          | Temperatur 3                                 |
+| 8–9       | Temp4          | Temperatur 4                                 |
+| 10–11     | Temp5          | Temperatur 5                                 |
+| 12–13     | Temp6          | Temperatur 6                                 |
+| 14        | Ausgangsbyte   | Relaisstatus (bitweise codiert)              |
+
+## 🌡️ Temperaturdaten-Format
+
+| Eigenschaft   | Wert                                 |
+|----------------|--------------------------------------|
+| Datenformat    | 16 Bit (Low-Byte + High-Byte)       |
+| Auflösung      | 1/10 °C                             |
+| Vorzeichen     | signed (Vorzeichenbehaftet)         |
+| Byte-Reihenfolge| Little Endian (Low-Byte zuerst)    |
+
+Berechnung der Temperatur:
+
+```
+Temp = (High << 8) | Low
+Temp_Celsius = Temp / 10.0
+```
+
+## 🚦 Ausgangsbyte (Relais-Status)
+
+| Bit | Bedeutung     |
+|-----|----------------|
+| 0   | Relais 1       |
+| 1   | Relais 2       |
+| 2   | Relais 3       |
+| 3   | Relais 4       |
+| 4–7 | Unbenutzt      |
+
+Bit = 1 → Relais AN  
+Bit = 0 → Relais AUS
 
 ---
 
@@ -110,30 +155,107 @@ pip install -r requirements.txt
 ## Verwendung
 
 ```yaml
-
 external_components:
   - source:
       type: git
       url: https://github.com/DerTolleMaz/esphome-uvr64
+      ref: main
     components: [uvr64_dlbus]
     refresh: always
-
+globals:
+  - id: dlbus_ptr
+    type: esphome::uvr64_dlbus::DLBusSensor*
+    restore_value: no
+    initial_value: 'nullptr'
+    #includes: ["uvr64_dlbus/dlbus_sensor.h"]
+# Sensoren deklarieren
 sensor:
-  - platform: uvr64_dlbus
-    id: uvr64_bus
-    pin: D1
-    temp_sensors:
-      - name: "Temp 1"
-      - name: "Temp 2"
-      - name: "Temp 3"
-      - name: "Temp 4"
-      - name: "Temp 5"
-      - name: "Temp 6"
-    relay_sensors:
-      - name: "Relais 1"
-      - name: "Relais 2"
-      - name: "Relais 3"
-      - name: "Relais 4"
+  - platform: template
+    name: "UVR64 Solarthermie"
+    id: temp0
+  - platform: template
+    name: "UVR64 Solarthermie Boiler"
+    id: temp1
+  - platform: template
+    name: "UVR64 Solarthermie Puffer Unten"
+    id: temp2
+  - platform: template
+    name: "UVR64 Solarthermie Pool Waermetauscher"
+    id: temp3
+  - platform: template
+    name: "UVR64 Heizung Pool Waermetauscher"
+    id: temp4
+  - platform: template
+    name: "UVR64 Solarthermie Puffer Oben"
+    id: temp5
+
+  - platform: wifi_signal
+    name: UVR64 Solarthermie WiFi Signal Strength
+    update_interval: 60s
+
+
+binary_sensor:
+  - platform: gpio # DEBUG for the signal. 
+    pin: 
+      number: GPIO20
+      mode: INPUT
+    name: "DL Bus Signal"
+    on_press:
+      - logger.log: "Signal HIGH"
+    on_release:
+          - logger.log: "Signal LOW"
+  - platform: template
+    name: "UVR64 Relay Boiler"
+    id: relay0
+  - platform: template
+    name: "UVR64 Relay Puffer"
+    id: relay1
+  - platform: template
+    name: "UVR64 Relay Solarthermie Pool Waermetauscher"
+    id: relay2
+  - platform: template
+    name: "UVR64 Relay Heizung Pool Waermetauscher"
+    id: relay3
+
+# DL-Bus-Komponente
+uvr64_dlbus:
+  id: uvr
+  pin: 18
+  temp_sensors:
+    - temp0
+    - temp1
+    - temp2
+    - temp3
+    - temp4
+    - temp5
+  relay_sensors:
+    - relay0
+    - relay1
+    - relay2
+    - relay3
+
+interval:
+    - interval: 1s
+      then:
+      - logger.log: "DL-Bus läuft"
+      - lambda: |-
+          if (id(dlbus_ptr) == nullptr) {
+            auto dl = new esphome::uvr64_dlbus::DLBusSensor(id(uvr)->get_pin());
+            dl->set_temp_sensor(0, id(temp0));
+            dl->set_temp_sensor(1, id(temp1));
+            dl->set_temp_sensor(2, id(temp2));
+            dl->set_temp_sensor(3, id(temp3));
+            dl->set_temp_sensor(4, id(temp4));
+            dl->set_temp_sensor(5, id(temp5));
+            dl->set_relay_sensor(0, id(relay0));
+            dl->set_relay_sensor(1, id(relay1));
+            dl->set_relay_sensor(2, id(relay2));
+            dl->set_relay_sensor(3, id(relay3));
+            id(dlbus_ptr) = dl;
+            App.register_component(dl);
+          }
+
+
 ```
 
 ## Lokaler Test
