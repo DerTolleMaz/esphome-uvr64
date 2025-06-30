@@ -79,8 +79,9 @@ void DLBusSensor::loop() {
       detachInterrupt(digitalPinToInterrupt(pin_num_));
     }
 
-    parse_frame_();
-
+    //parse_frame_();
+    debug_decode_frame_();
+    
     if (this->pin_ != nullptr) {
       this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
     } else {
@@ -104,6 +105,85 @@ void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
     arg->timings_[arg->bit_index_] = duration > 255 ? 255 : duration;
     arg->bit_index_++;
   }
+}
+
+void DLBusSensor::debug_decode_frame_() {
+  ESP_LOGI(TAG, "======== DL-Bus Debug Start ========");
+
+  // 🔍 Bitstream als 1/0 ausgeben
+  std::string bitstream;
+  for (size_t i = 0; i < bit_index_; i++) {
+    bitstream += levels_[i] ? '1' : '0';
+  }
+  ESP_LOGI(TAG, "Bitstream (%d bits): %s", bit_index_, bitstream.c_str());
+
+  // 🔍 SYNC suchen: 16 HIGHs (1111111111111111)
+  size_t sync_pos = std::string::npos;
+  for (size_t i = 0; i + 16 <= bitstream.length(); i++) {
+    if (bitstream.substr(i, 16) == std::string(16, '1')) {
+      sync_pos = i + 16;
+      ESP_LOGI(TAG, "SYNC found at bit %d", (int)i);
+      break;
+    }
+  }
+
+  if (sync_pos == std::string::npos) {
+    ESP_LOGW(TAG, "No SYNC found!");
+    return;
+  }
+
+  // 🔥 Nach SYNC → Datenbytes dekodieren
+  std::vector<uint8_t> bytes;
+  size_t pos = sync_pos;
+
+  while (pos + 20 <= bitstream.length()) {
+    // Datenbyte besteht aus:
+    // Startbit (0) + 8 Datenbits (Manchester → 16 Bits) + Stopbit (1)
+
+    // Prüfe Startbit
+    if (bitstream[pos] != '0') {
+      ESP_LOGW(TAG, "Frame error: Expected Startbit 0 at bit %d", (int)pos);
+      break;
+    }
+    pos++;
+
+    // 8 Datenbits (jeweils Manchester → 2 Bits pro Datenbit)
+    uint8_t data = 0;
+    for (int b = 0; b < 8; b++) {
+      char first = bitstream[pos];
+      char second = bitstream[pos + 1];
+      pos += 2;
+
+      if (first == second) {
+        ESP_LOGW(TAG, "Manchester error at bit %d-%d", (int)(pos - 2), (int)(pos - 1));
+        break;
+      }
+      bool bit = (first == '1');
+      data = (data << 1) | (bit ? 1 : 0);
+    }
+
+    bytes.push_back(data);
+
+    // Prüfe Stopbit
+    if (bitstream[pos] != '1') {
+      ESP_LOGW(TAG, "Frame error: Expected Stopbit 1 at bit %d", (int)pos);
+      break;
+    }
+    pos++;
+  }
+
+  // 🔥 Bytes als HEX-Dump ausgeben
+  std::string hex;
+  for (size_t i = 0; i < bytes.size(); i++) {
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02X ", bytes[i]);
+    hex += buf;
+    if ((i + 1) % 8 == 0)
+      hex += "\n";
+  }
+
+  ESP_LOGI(TAG, "Decoded Bytes (%d):\n%s", (int)bytes.size(), hex.c_str());
+  ESP_LOGI(TAG, "======== DL-Bus Debug End ==========");
 }
 
 void DLBusSensor::log_bits_() {
