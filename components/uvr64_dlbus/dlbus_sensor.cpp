@@ -1,162 +1,140 @@
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
-#ifdef ARDUINO
-#include <Arduino.h>
-#else
-#include "arduino_stubs.h"
-#endif
-
-#include <vector>
-#include <cstdio>
-#include <string>
 
 namespace esphome {
 namespace uvr64_dlbus {
 
 static const char *const TAG = "uvr64_dlbus";
 
-DLBusSensor::DLBusSensor() {}
-DLBusSensor::DLBusSensor(uint8_t pin) : pin_num_(pin) {}
-DLBusSensor::DLBusSensor(InternalGPIOPin *pin) : pin_(pin) {}
+// Schwellenwerte
+static const uint32_t FRAME_TIMEOUT_US = 100000;  // 100ms
+static const uint32_t MIN_FLANK_TIME_US = 2000;   // 2ms minimale gültige Flanke
+static const size_t MAX_BITS = 1024;               // Sicherheits-Puffer
 
-uint8_t DLBusSensor::get_pin() const {
-  if (this->pin_ != nullptr)
-    return this->pin_->get_pin();
-  return this->pin_num_;
+void IRAM_ATTR DLBusSensor::gpio_isr_(DLBusSensor *sensor) {
+  const uint32_t now = micros();
+  const uint32_t duration = now - sensor->last_change_;
+  const bool level = sensor->pin_isr_.digital_read();
+  sensor->last_change_ = now;
+
+  // Flanken kürzer als 2ms ignorieren
+  if (duration < MIN_FLANK_TIME_US) return;
+
+  if (sensor->bit_index_ < MAX_BITS) {
+    sensor->timings_[sensor->bit_index_] = duration;
+    sensor->levels_[sensor->bit_index_] = level;
+    sensor->bit_index_++;
+  }
 }
 
 void DLBusSensor::setup() {
-  if (this->pin_ != nullptr) {
-    this->pin_->setup();
-    this->pin_isr_ = this->pin_->to_isr();
-    this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
-    ESP_LOGI(TAG, "DLBusSensor setup complete, pin %d", this->pin_->get_pin());
-  } else {
-    pinMode(pin_num_, INPUT);
-    attachInterruptArg(digitalPinToInterrupt(pin_num_), reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
-    ESP_LOGI(TAG, "DLBusSensor setup complete, pin %d", pin_num_);
-  }
+  ESP_LOGI(TAG, "DLBusSensor setup on pin %d", pin_num_);
+  pinMode(pin_num_, INPUT);
+  attachInterruptArg(
+    digitalPinToInterrupt(pin_num_),
+    reinterpret_cast<void (*)(void *)>(&DLBusSensor::gpio_isr_),
+    this,
+    CHANGE
+  );
 }
 
 void DLBusSensor::loop() {
-  uint32_t now = micros();
+  const uint32_t now = micros();
 
-  if (!frame_buffer_ready_ && bit_index_ > 0 && (now - last_change_) > FRAME_TIMEOUT_US) {
-    frame_buffer_ready_ = true;
-  }
-
-  if (frame_buffer_ready_) {
-    ESP_LOGD(TAG, "Processing frame with %d bits", bit_index_);
-    log_bits_();
-
-    if (bit_index_ < 100) {
-      ESP_LOGW(TAG, "Frame ignored – too short to be valid.");
-      bit_index_ = 0;
-      frame_buffer_ready_ = false;
-      return;
-    }
-
-    if (this->pin_ != nullptr) {
-      this->pin_->detach_interrupt();
-    } else {
-      detachInterrupt(digitalPinToInterrupt(pin_num_));
-    }
-
-    parse_frame_();
-
-    if (this->pin_ != nullptr) {
-      this->pin_->attach_interrupt(&DLBusSensor::isr, this, gpio::INTERRUPT_ANY_EDGE);
-    } else {
-      attachInterruptArg(digitalPinToInterrupt(pin_num_), reinterpret_cast<void (*)(void *)>(&DLBusSensor::isr), this, CHANGE);
-    }
-
-    frame_buffer_ready_ = false;
+  // Prüfen ob Frame Timeout
+  if (bit_index_ > 0 && (now - last_change_) > FRAME_TIMEOUT_US) {
+    detachInterrupt(digitalPinToInterrupt(pin_num_));
+    process_frame_();
     bit_index_ = 0;
+    attachInterruptArg(
+      digitalPinToInterrupt(pin_num_),
+      reinterpret_cast<void (*)(void *)>(&DLBusSensor::gpio_isr_),
+      this,
+      CHANGE
+    );
   }
 }
 
-void IRAM_ATTR DLBusSensor::isr(DLBusSensor *arg) {
-  uint32_t now = micros();
-  uint8_t level = arg->pin_isr_.digital_read();
-  uint32_t duration = now - arg->last_change_;
-  arg->last_change_ = now;
+void DLBusSensor::process_frame_() {
+  ESP_LOGI(TAG, "Processing frame with %d bits", bit_index_);
 
-  if (arg->bit_index_ < MAX_BITS) {
-    arg->levels_[arg->bit_index_] = level;
-    uint8_t units = (duration + HALF_BIT_US / 2) / HALF_BIT_US;
-    if (units == 0)
-      units = 1;
-    arg->timings_[arg->bit_index_] = units;
-    arg->bit_index_++;
-  }
-}
-
-void DLBusSensor::parse_frame_() {
-  std::vector<uint8_t> bytes;
-  uint8_t current_byte = 0;
-  uint8_t bit_count = 0;
-
-  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
-    uint8_t first = timings_[i];
-    uint8_t second = timings_[i + 1];
-    if (first == second)
-      return;  // Invalid Manchester sequence
-
-    bool bit = first < second;
-    current_byte = (current_byte << 1) | (bit ? 1 : 0);
-    bit_count++;
-
-    if (bit_count == 8) {
-      bytes.push_back(current_byte);
-      current_byte = 0;
-      bit_count = 0;
-    }
-  }
-
-  log_frame_(bytes);
-
-  if (bytes.size() < 16) {
-    ESP_LOGW(TAG, "Frame too short.");
+  if (bit_index_ < 100) {
+    ESP_LOGW(TAG, "Frame too short, ignored");
     return;
   }
 
-  for (int t = 0; t < 6; t++) {
-    uint8_t high = bytes[t * 2];
-    uint8_t low = bytes[t * 2 + 1];
-    int16_t raw = (static_cast<int16_t>(high) << 8) | low;
-    if (this->temp_sensors_[t]) {
-      this->temp_sensors_[t]->publish_state(raw / 10.0f);
-      ESP_LOGI(TAG, "Temperature Sensor %d: %.1f°C (Raw: %d)", t, raw / 10.0f, raw);
+  // Manchester-Dekodierung
+  std::vector<bool> bits;
+  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
+    bool b = (timings_[i] < timings_[i + 1]);
+    bits.push_back(b);
+  }
+
+  ESP_LOGI(TAG, "Bitstream length %d", bits.size());
+
+  // Suche SYNC (mindestens 16 HIGH)
+  size_t sync_index = 0;
+  size_t high_count = 0;
+  for (size_t i = 0; i < bits.size(); i++) {
+    if (bits[i]) {
+      high_count++;
+      if (high_count >= 16) {
+        sync_index = i + 1;
+        ESP_LOGI(TAG, "SYNC found at bit %d", sync_index);
+        break;
+      }
+    } else {
+      high_count = 0;
+    }
+  }
+  if (sync_index == 0) {
+    ESP_LOGW(TAG, "No SYNC found!");
+    return;
+  }
+
+  // Byteweise Dekodierung
+  std::vector<uint8_t> bytes;
+  for (size_t i = sync_index; i + 10 <= bits.size(); i += 10) {
+    if (!bits[i]) {
+      // Startbit = 0 korrekt
+      uint8_t data = 0;
+      for (int b = 0; b < 8; b++) {
+        data |= (bits[i + 1 + b] << b);  // LSB first
+      }
+      if (bits[i + 9] != 1) {
+        ESP_LOGW(TAG, "Stopbit error at byte %d", bytes.size());
+        continue;
+      }
+      bytes.push_back(data);
+    } else {
+      ESP_LOGW(TAG, "Startbit error at byte %d", bytes.size());
     }
   }
 
-  for (int r = 0; r < 4; r++) {
-    uint8_t val = bytes[12 + r];
-    bool state = val != 0;
-    if (this->relay_sensors_[r]) {
-      this->relay_sensors_[r]->publish_state(state);
-      ESP_LOGI(TAG, "Relay %d: %s (Raw: %d)", r, state ? "ON" : "OFF", val);
-    }
-  }
-}
+  ESP_LOGI(TAG, "Decoded %d bytes", bytes.size());
+  if (bytes.size() == 0) return;
 
+  log_frame_(bytes);
 
-void DLBusSensor::log_bits_() {
-  std::string bitstring;
-  for (size_t i = 0; i < bit_index_; i++) {
-    bitstring += std::to_string(timings_[i]) + " ";
+  // Frame auswerten, Beispiel: Temperatur 1
+  if (bytes.size() >= 14) {
+    int16_t temp_raw = (bytes[3] << 8) | bytes[2]; // Temp1 high + low
+    float temp_c = temp_raw / 10.0f;
+    if (temp_sensors_[0] != nullptr)
+      temp_sensors_[0]->publish_state(temp_c);
+    ESP_LOGI(TAG, "Temp1: %.1f°C", temp_c);
+    // → Analog alle weiteren Temperaturen und Relais
   }
-  ESP_LOGI(TAG, "Bitstream (%d bits): %s", (int)bit_index_, bitstring.c_str());
 }
 
 void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
-  char buf[512];
   std::string out;
-  for (size_t i = 0; i < frame.size(); i++) {
-    snprintf(buf, sizeof(buf), "%02X ", frame[i]);
+  char buf[8];
+  for (auto b : frame) {
+    snprintf(buf, sizeof(buf), "%02X ", b);
     out += buf;
   }
-  ESP_LOGI(TAG, "Frame Bytes:\n%s", out.c_str());
+  ESP_LOGI(TAG, "Frame Bytes: %s", out.c_str());
 }
 
 }  // namespace uvr64_dlbus
