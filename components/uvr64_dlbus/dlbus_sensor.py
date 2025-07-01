@@ -18,10 +18,10 @@ CONFIG_SCHEMA = cv.Schema({
 }).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
-    var = cg.new_Pvariable(config[CONF_ID])
+    pin = await cg.gpio_pin_expression(config[CONF_PIN])
+    var = cg.new_Pvariable(config[CONF_ID], pin)
     await cg.register_component(var, config)
 
-    pin = await cg.gpio_pin_expression(config[CONF_PIN])
     cg.add(var.set_pin(pin))
 
     for i, sens in enumerate(config[CONF_TEMP_SENSORS]):
