@@ -12,6 +12,16 @@ class TestDLBusSensor : public DLBusSensor {
   using DLBusSensor::bit_index_;
 };
 
+class DummyPin : public esphome::InternalGPIOPin {
+ public:
+  explicit DummyPin(uint8_t pin) : pin_(pin) {}
+  uint8_t get_pin() const override { return pin_; }
+  void setup() override {}
+  void pin_mode(esphome::gpio::Flags) override {}
+ private:
+  uint8_t pin_;
+};
+
 
 static void encode_byte(TestDLBusSensor &sensor, uint8_t value) {
   for (int i = 7; i >= 0; --i) {
@@ -22,7 +32,8 @@ static void encode_byte(TestDLBusSensor &sensor, uint8_t value) {
 }
 
 int main() {
-  TestDLBusSensor sensor(static_cast<uint8_t>(0));
+  DummyPin pin(0);
+  TestDLBusSensor sensor(&pin);
 
   esphome::sensor::Sensor temps[6];
   esphome::binary_sensor::BinarySensor relays[4];
