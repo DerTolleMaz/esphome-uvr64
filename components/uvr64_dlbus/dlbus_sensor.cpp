@@ -198,15 +198,26 @@ void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
 }
 
 bool DLBusSensor::validate_frame_(const std::vector<uint8_t> &frame) {
+  bool valid = true;
   if (frame.size() != 17) {
     ESP_LOGW(TAG, "Frame length invalid: %u", static_cast<unsigned>(frame.size()));
-    return false;
-  }
-  if (frame[0] != 0x20) {
+    valid = false;
+  } else if (frame[0] != 0x20) {
     ESP_LOGW(TAG, "Invalid device id: 0x%02X", frame[0]);
-    return false;
+    valid = false;
   }
-  return true;
+
+  if (!valid) {
+    std::string out;
+    for (auto b : frame) {
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%02X ", b);
+      out += buf;
+    }
+    ESP_LOGW(TAG, "Invalid frame content: %s", out.c_str());
+  }
+
+  return valid;
 }
 
 }  // namespace uvr64_dlbus
