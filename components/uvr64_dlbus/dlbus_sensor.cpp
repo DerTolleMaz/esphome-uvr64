@@ -123,24 +123,65 @@ bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
       max_t = t;
   }
 
-  double threshold = (static_cast<double>(min_t) + static_cast<double>(max_t)) / 2.0;
-  size_t bit_pos = 0;
-  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
-    bool first_long = static_cast<double>(timings_[i]) >= threshold;
-    bool second_long = static_cast<double>(timings_[i + 1]) >= threshold;
+  double avg_short = static_cast<double>(min_t);
+  double avg_long = static_cast<double>(max_t);
+  double threshold = (avg_short + avg_long) / 2.0;
 
+  size_t bit_pos = 0;
+  size_t errors = 0;
+
+  for (size_t i = 0; i + 1 < bit_index_; i += 2) {
+    bool first_long = std::abs(static_cast<double>(timings_[i]) - avg_long) <
+                       std::abs(static_cast<double>(timings_[i]) - avg_short);
+    if (first_long)
+      avg_long = (avg_long * 7.0 + timings_[i]) / 8.0;
+    else
+      avg_short = (avg_short * 7.0 + timings_[i]) / 8.0;
+
+    threshold = (avg_short + avg_long) / 2.0;
+
+    bool second_long = std::abs(static_cast<double>(timings_[i + 1]) - avg_long) <
+                        std::abs(static_cast<double>(timings_[i + 1]) - avg_short);
+    if (second_long)
+      avg_long = (avg_long * 7.0 + timings_[i + 1]) / 8.0;
+    else
+      avg_short = (avg_short * 7.0 + timings_[i + 1]) / 8.0;
+
+    threshold = (avg_short + avg_long) / 2.0;
+
+    bool bit;
     if (first_long == second_long) {
+      errors++;
+      bit = timings_[i] < timings_[i + 1];
       if (debug_)
-        ESP_LOGD(TAG, "Invalid Manchester pair at %zu: %d/%d", i, timings_[i], timings_[i + 1]);
-      return false;
+        ESP_LOGD(TAG,
+                 "Invalid Manchester pair at %zu: %d/%d (th=%.1f short=%.1f long=%.1f errors=%zu)",
+                 i, timings_[i], timings_[i + 1], threshold, avg_short, avg_long, errors);
+      if (errors > 3)
+        return false;
+    } else {
+      bit = second_long;
     }
 
-    bool bit = second_long;
     if (bit_pos % 8 == 0)
       result.push_back(0);
 
     result.back() = (result.back() << 1) | (bit ? 1 : 0);
     bit_pos++;
+  }
+
+  if (result.empty())
+    return false;
+
+  if (result[0] != 0x20) {
+    for (size_t idx = 1; idx < result.size(); idx++) {
+      if (result[idx] == 0x20 && result.size() - idx >= 17) {
+        if (debug_)
+          ESP_LOGD(TAG, "Resynchronized at byte %zu", idx);
+        result.erase(result.begin(), result.begin() + idx);
+        break;
+      }
+    }
   }
 
   return !result.empty();
