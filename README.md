@@ -220,7 +220,7 @@ binary_sensor:
 # DL-Bus-Komponente
 uvr64_dlbus:
   id: uvr
-  pin: 18
+  pin: GPIO18
   temp_sensors:
     - temp0
     - temp1
