@@ -3,9 +3,13 @@
 #include "esphome/core/component.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include <vector>
 
 namespace esphome {
 namespace uvr64_dlbus {
+
+static const uint32_t FRAME_TIMEOUT_US = 100000;  // 100ms
+static const int MAX_BITS = 1024;
 
 class DLBusSensor : public Component {
  public:
@@ -23,6 +27,7 @@ class DLBusSensor : public Component {
  protected:
   void process_frame_();
   void parse_frame_(const std::vector<uint8_t> &frame);
+  void parse_frame_();
   void log_frame_(const std::vector<uint8_t> &frame);
   bool decode_manchester_(std::vector<uint8_t> &result);
   void log_bits_();
@@ -33,7 +38,6 @@ class DLBusSensor : public Component {
   uint32_t last_change_{0};
   bool frame_buffer_ready_{false};
 
-  static const int MAX_BITS = 1024;
   uint8_t levels_[MAX_BITS];
   uint8_t timings_[MAX_BITS];
   uint16_t bit_index_{0};
