@@ -10,11 +10,14 @@ DLBusSensor = uvr64_dlbus_ns.class_('DLBusSensor', cg.Component)
 CONF_TEMP_SENSORS = "temp_sensors"
 CONF_RELAY_SENSORS = "relay_sensors"
 
+CONF_DEBUG = "debug"
+
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(DLBusSensor),
     cv.Required(CONF_PIN): pins.internal_gpio_input_pin_schema,
     cv.Required(CONF_TEMP_SENSORS): cv.ensure_list(cv.use_id(sensor.Sensor)),
     cv.Required(CONF_RELAY_SENSORS): cv.ensure_list(cv.use_id(binary_sensor.BinarySensor)),
+    cv.Optional(CONF_DEBUG, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
 
 async def to_code(config):
@@ -31,3 +34,5 @@ async def to_code(config):
     for i, bsens in enumerate(config[CONF_RELAY_SENSORS]):
         bsens_var = await cg.get_variable(bsens)
         cg.add(var.set_relay_sensor(i, bsens_var))
+
+    cg.add(var.set_debug(config[CONF_DEBUG]))

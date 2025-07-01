@@ -20,6 +20,9 @@ class DLBusSensor : public Component {
   InternalGPIOPin *get_pin() const { return pin_; }
   uint8_t get_pin_num() const { return pin_ ? pin_->get_pin() : 0; }
 
+  void set_debug(bool enable) { debug_ = enable; }
+  bool is_debug() const { return debug_; }
+
   void set_temp_sensor(uint8_t index, sensor::Sensor *sensor) { temp_sensors_[index] = sensor; }
   void set_relay_sensor(uint8_t index, binary_sensor::BinarySensor *sensor) { relay_sensors_[index] = sensor; }
 
@@ -33,6 +36,7 @@ class DLBusSensor : public Component {
   void log_frame_(const std::vector<uint8_t> &frame);
   bool decode_manchester_(std::vector<uint8_t> &result);
   void log_bits_();
+  bool validate_frame_(const std::vector<uint8_t> &frame);
 
   static void IRAM_ATTR gpio_isr_(DLBusSensor *arg);
 
@@ -43,6 +47,8 @@ class DLBusSensor : public Component {
   uint8_t levels_[MAX_BITS];
   uint16_t timings_[MAX_BITS];
   uint16_t bit_index_{0};
+
+  bool debug_{false};
 
   sensor::Sensor *temp_sensors_[6]{};
   binary_sensor::BinarySensor *relay_sensors_[4]{};

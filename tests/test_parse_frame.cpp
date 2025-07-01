@@ -41,7 +41,8 @@ int main() {
   for (int i = 0; i < 6; i++) sensor.set_temp_sensor(i, &temps[i]);
   for (int i = 0; i < 4; i++) sensor.set_relay_sensor(i, &relays[i]);
 
-  uint8_t frame[16] = {
+  uint8_t frame[17] = {
+      0x20,        // device id
       0x00, 0xC8,  // 20.0°C
       0x00, 0xD7,  // 21.5°C
       0xFF, 0xF6,  // -1.0°C
