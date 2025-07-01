@@ -41,7 +41,7 @@ class DLBusSensor : public Component {
   bool frame_buffer_ready_{false};
 
   uint8_t levels_[MAX_BITS];
-  uint8_t timings_[MAX_BITS];
+  uint16_t timings_[MAX_BITS];
   uint16_t bit_index_{0};
 
   sensor::Sensor *temp_sensors_[6]{};
