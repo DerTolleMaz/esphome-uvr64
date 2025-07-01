@@ -1,6 +1,15 @@
 #include "dlbus_sensor.h"
 #include "esphome/core/log.h"
+#ifdef ARDUINO
 #include <Arduino.h>
+#else
+#include "arduino_stubs.h"
+#endif
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <string>
+#include <vector>
 
 namespace esphome {
 namespace uvr64_dlbus {
@@ -71,6 +80,17 @@ void DLBusSensor::process_frame_() {
 
   log_frame_(decoded_bytes);
   parse_frame_(decoded_bytes);
+}
+
+void DLBusSensor::parse_frame_() {
+  std::vector<uint8_t> decoded;
+  if (!decode_manchester_(decoded)) {
+    ESP_LOGW(TAG, "Manchester decode failed");
+    log_bits_();
+    return;
+  }
+  log_frame_(decoded);
+  parse_frame_(decoded);
 }
 
 bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
