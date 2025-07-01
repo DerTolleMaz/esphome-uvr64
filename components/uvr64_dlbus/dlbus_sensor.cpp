@@ -113,6 +113,15 @@ bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
   if (bit_index_ < 2)
     return false;
 
+  // Try clock-synchronized decoding first
+  if (decode_sync_(result)) {
+    if (debug_)
+      ESP_LOGD(TAG, "Clock based decode successful");
+    return true;
+  }
+  if (debug_)
+    ESP_LOGD(TAG, "Clock sync failed, falling back to pulse decode");
+
   uint16_t min_t = UINT16_MAX;
   uint16_t max_t = 0;
   for (uint16_t i = 0; i < bit_index_; i++) {
@@ -183,6 +192,65 @@ bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
       }
     }
   }
+
+  return !result.empty();
+}
+
+bool DLBusSensor::decode_sync_(std::vector<uint8_t> &result) {
+  if (bit_index_ < 2)
+    return false;
+
+  std::vector<uint32_t> times(bit_index_);
+  uint32_t t = 0;
+  for (size_t i = 0; i < bit_index_; i++) {
+    t += timings_[i];
+    times[i] = t;
+  }
+
+  size_t sync_idx = SIZE_MAX;
+  for (size_t i = 0; i < bit_index_; i++) {
+    if (timings_[i] >= SYNC_MIN_US) {
+      sync_idx = i;
+      break;
+    }
+  }
+
+  if (sync_idx == SIZE_MAX || sync_idx + 1 >= bit_index_)
+    return false;
+
+  const uint32_t BIT_US = 20000;
+  const uint32_t SAMPLE_OFFSET_US = 15000;  // middle of second half
+
+  uint32_t frame_start = times[sync_idx];
+  size_t edge_ptr = sync_idx + 1;
+  bool level = levels_[sync_idx];
+  uint32_t next_edge_time = edge_ptr < bit_index_ ? times[edge_ptr] : UINT32_MAX;
+
+  size_t bit_pos = 0;
+  uint32_t total_time = times.back();
+
+  while (true) {
+    uint32_t sample_time = frame_start + SAMPLE_OFFSET_US + bit_pos * BIT_US;
+    if (sample_time >= total_time)
+      break;
+
+    while (edge_ptr < bit_index_ && next_edge_time <= sample_time) {
+      level = levels_[edge_ptr];
+      edge_ptr++;
+      next_edge_time = edge_ptr < bit_index_ ? times[edge_ptr] : UINT32_MAX;
+    }
+
+    if (bit_pos % 8 == 0)
+      result.push_back(0);
+    result.back() = (result.back() << 1) | (level ? 1 : 0);
+
+    bit_pos++;
+    if (bit_pos > 17 * 8)
+      break;
+  }
+
+  if (debug_ && !result.empty())
+    ESP_LOGD(TAG, "SYNC detected, decoded %zu bits in clock mode", bit_pos);
 
   return !result.empty();
 }
