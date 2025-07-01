@@ -17,11 +17,15 @@ namespace uvr64_dlbus {
 static const char *const TAG = "uvr64_dlbus";
 
 void DLBusSensor::setup() {
-  pinMode(pin_num_, INPUT);
-  attachInterruptArg(digitalPinToInterrupt(pin_num_),
-                     reinterpret_cast<void (*)(void *)>(&DLBusSensor::gpio_isr_),
-                     this, CHANGE);
-  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", pin_num_);
+  if (this->pin_ == nullptr) {
+    ESP_LOGW(TAG, "No pin configured for DLBusSensor");
+    return;
+  }
+  this->pin_->setup();
+  this->pin_->pin_mode(gpio::FLAG_INPUT);
+  this->pin_->attach_interrupt(&DLBusSensor::gpio_isr_, this,
+                               gpio::INTERRUPT_ANY_EDGE);
+  ESP_LOGI(TAG, "DLBusSensor setup complete, listening on pin %d", this->pin_->get_pin());
 }
 
 void DLBusSensor::loop() {
@@ -42,13 +46,12 @@ void DLBusSensor::loop() {
       return;
     }
 
-    detachInterrupt(digitalPinToInterrupt(pin_num_));
+    this->pin_->detach_interrupt();
 
     process_frame_();
 
-    attachInterruptArg(digitalPinToInterrupt(pin_num_),
-                       reinterpret_cast<void (*)(void *)>(&DLBusSensor::gpio_isr_),
-                       this, CHANGE);
+    this->pin_->attach_interrupt(&DLBusSensor::gpio_isr_, this,
+                                 gpio::INTERRUPT_ANY_EDGE);
 
     frame_buffer_ready_ = false;
     bit_index_ = 0;
@@ -57,7 +60,7 @@ void DLBusSensor::loop() {
 
 void IRAM_ATTR DLBusSensor::gpio_isr_(DLBusSensor *sensor) {
   uint32_t now = micros();
-  bool level = digitalRead(sensor->pin_num_);
+  bool level = sensor->pin_->digital_read();
   uint32_t duration = now - sensor->last_change_;
   sensor->last_change_ = now;
 
