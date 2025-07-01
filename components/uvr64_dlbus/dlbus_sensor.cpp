@@ -61,12 +61,13 @@ void DLBusSensor::loop() {
 void IRAM_ATTR DLBusSensor::gpio_isr_(DLBusSensor *sensor) {
   uint32_t now = micros();
   bool level = sensor->pin_->digital_read();
-  uint32_t duration = now - sensor->last_change_;
+  uint32_t diff = now - sensor->last_change_;
+  uint16_t duration = diff > UINT16_MAX ? UINT16_MAX : static_cast<uint16_t>(diff);
   sensor->last_change_ = now;
 
   if (sensor->bit_index_ < MAX_BITS) {
     sensor->levels_[sensor->bit_index_] = level;
-    sensor->timings_[sensor->bit_index_] = (duration > 255) ? 255 : duration;
+    sensor->timings_[sensor->bit_index_] = duration;
     sensor->bit_index_++;
   }
 }
