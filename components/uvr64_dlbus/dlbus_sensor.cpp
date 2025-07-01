@@ -86,6 +86,9 @@ void DLBusSensor::process_frame_() {
   }
 
   log_frame_(decoded_bytes);
+  if (!validate_frame_(decoded_bytes)) {
+    return;
+  }
   parse_frame_(decoded_bytes);
 }
 
@@ -99,20 +102,42 @@ void DLBusSensor::parse_frame_() {
     return;
   }
   log_frame_(decoded);
+  if (!validate_frame_(decoded)) {
+    return;
+  }
   parse_frame_(decoded);
 }
 
 bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
   result.clear();
+  if (bit_index_ < 2)
+    return false;
+
+  uint16_t min_t = UINT16_MAX;
+  uint16_t max_t = 0;
+  for (uint16_t i = 0; i < bit_index_; i++) {
+    uint16_t t = timings_[i];
+    if (t < min_t)
+      min_t = t;
+    if (t > max_t)
+      max_t = t;
+  }
+
+  double threshold = (static_cast<double>(min_t) + static_cast<double>(max_t)) / 2.0;
   size_t bit_pos = 0;
-
-  // Manchester-Dekodierung: 2 Pegel = 1 Bit
   for (size_t i = 0; i + 1 < bit_index_; i += 2) {
-    bool bit = timings_[i] < timings_[i + 1];
+    bool first_long = static_cast<double>(timings_[i]) >= threshold;
+    bool second_long = static_cast<double>(timings_[i + 1]) >= threshold;
 
-    if (bit_pos % 8 == 0) {
-      result.push_back(0);
+    if (first_long == second_long) {
+      if (debug_)
+        ESP_LOGD(TAG, "Invalid Manchester pair at %zu: %d/%d", i, timings_[i], timings_[i + 1]);
+      return false;
     }
+
+    bool bit = second_long;
+    if (bit_pos % 8 == 0)
+      result.push_back(0);
 
     result.back() = (result.back() << 1) | (bit ? 1 : 0);
     bit_pos++;
@@ -122,14 +147,15 @@ bool DLBusSensor::decode_manchester_(std::vector<uint8_t> &result) {
 }
 
 void DLBusSensor::parse_frame_(const std::vector<uint8_t> &frame) {
-  if (frame.size() < 16) {
-    ESP_LOGW(TAG, "Frame too short for parsing.");
+  if (!validate_frame_(frame)) {
     return;
   }
 
+  const size_t offset = 1;  // skip device id
+
   for (int i = 0; i < 6; i++) {
-    uint8_t high = frame[i * 2];
-    uint8_t low = frame[i * 2 + 1];
+    uint8_t high = frame[offset + i * 2];
+    uint8_t low = frame[offset + i * 2 + 1];
     int16_t raw = (static_cast<int16_t>(high) << 8) | low;
     if (temp_sensors_[i] != nullptr) {
       temp_sensors_[i]->publish_state(raw / 10.0f);
@@ -138,7 +164,7 @@ void DLBusSensor::parse_frame_(const std::vector<uint8_t> &frame) {
   }
 
   for (int r = 0; r < 4; r++) {
-    uint8_t val = frame[12 + r];
+    uint8_t val = frame[offset + 12 + r];
     bool state = val != 0;
     if (relay_sensors_[r] != nullptr) {
       relay_sensors_[r]->publish_state(state);
@@ -148,6 +174,8 @@ void DLBusSensor::parse_frame_(const std::vector<uint8_t> &frame) {
 }
 
 void DLBusSensor::log_bits_() {
+  if (!debug_)
+    return;
   std::string dump;
   for (size_t i = 0; i < bit_index_; i++) {
     char buf[16];
@@ -158,6 +186,8 @@ void DLBusSensor::log_bits_() {
 }
 
 void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
+  if (!debug_)
+    return;
   std::string out;
   for (auto b : frame) {
     char buf[8];
@@ -165,6 +195,18 @@ void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
     out += buf;
   }
   ESP_LOGD(TAG, "Bus Bytes: %s", out.c_str());
+}
+
+bool DLBusSensor::validate_frame_(const std::vector<uint8_t> &frame) {
+  if (frame.size() != 17) {
+    ESP_LOGW(TAG, "Frame length invalid: %u", static_cast<unsigned>(frame.size()));
+    return false;
+  }
+  if (frame[0] != 0x20) {
+    ESP_LOGW(TAG, "Invalid device id: 0x%02X", frame[0]);
+    return false;
+  }
+  return true;
 }
 
 }  // namespace uvr64_dlbus
