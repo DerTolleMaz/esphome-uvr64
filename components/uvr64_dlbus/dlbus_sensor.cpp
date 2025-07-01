@@ -73,12 +73,15 @@ void IRAM_ATTR DLBusSensor::gpio_isr_(DLBusSensor *sensor) {
 }
 
 void DLBusSensor::process_frame_() {
+  // Log the raw pin signal before attempting to decode so the user can see the
+  // exact timings and logic levels observed on the DLBus pin.
+  log_bits_();
+
   std::vector<uint8_t> decoded_bytes;
 
   bool ok = decode_manchester_(decoded_bytes);
   if (!ok) {
     ESP_LOGW(TAG, "Manchester decode failed");
-    log_bits_();
     return;
   }
 
@@ -87,10 +90,12 @@ void DLBusSensor::process_frame_() {
 }
 
 void DLBusSensor::parse_frame_() {
+  // Provide the raw bitstream for debugging before decoding.
+  log_bits_();
+
   std::vector<uint8_t> decoded;
   if (!decode_manchester_(decoded)) {
     ESP_LOGW(TAG, "Manchester decode failed");
-    log_bits_();
     return;
   }
   log_frame_(decoded);
@@ -149,7 +154,7 @@ void DLBusSensor::log_bits_() {
     snprintf(buf, sizeof(buf), "%d:%d ", timings_[i], levels_[i]);
     dump += buf;
   }
-  ESP_LOGI(TAG, "Bitstream: %s", dump.c_str());
+  ESP_LOGD(TAG, "Bitstream: %s", dump.c_str());
 }
 
 void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
@@ -159,7 +164,7 @@ void DLBusSensor::log_frame_(const std::vector<uint8_t> &frame) {
     snprintf(buf, sizeof(buf), "%02X ", b);
     out += buf;
   }
-  ESP_LOGI(TAG, "Frame Bytes: %s", out.c_str());
+  ESP_LOGD(TAG, "Bus Bytes: %s", out.c_str());
 }
 
 }  // namespace uvr64_dlbus
