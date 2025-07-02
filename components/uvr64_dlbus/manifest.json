@@ -7,5 +7,5 @@
     "dlbus_sensor.py",
     "__init__.py"
   ],
-  "dependencies": ["esphome", "sensor", "binary_sensor"]
+  "dependencies": ["sensor", "binary_sensor"]
 }

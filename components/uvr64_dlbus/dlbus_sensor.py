@@ -25,7 +25,7 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID], pin)
     await cg.register_component(var, config)
 
-    #cg.add(var.set_pin(pin))
+    cg.add(var.set_pin(pin))
 
     for i, sens in enumerate(config[CONF_TEMP_SENSORS]):
         sens_var = await cg.get_variable(sens)

@@ -108,19 +108,16 @@ Bit = 0 → Relais AUS
 1. **SYNC-Erkennung:**  
 → 320 ms HIGH (16 HIGH-Bits ohne Flanken)
 
-2. **Taktbasierte Dekodierung:**
-→ Nach Erkennen des SYNC wird ein interner Bit-Takt erzeugt und der Pegel in der zweiten Halbperiode jedes Bits abgetastet.
+2. **Manchester-Dekodierung:**  
+→ Jede Flanke → Halbbits → Bit zusammensetzen.
 
-3. **Fallback Manchester-Dekodierung:**
-→ Falls keine Synchronisation erkannt wird, erfolgt die klassische Auswertung über Pulsbreiten.
-
-4. **Bit-zu-Byte-Konverter:**
+3. **Bit-zu-Byte-Konverter:**  
 → Startbit → 8 Datenbits → Stopbit.
 
-5. **Rahmen-Pufferung:**
+4. **Rahmen-Pufferung:**  
 → Von SYNC bis SYNC als vollständiges Telegramm verarbeiten.
 
-6. **Datenparser:**
+5. **Datenparser:**  
 → Adressiert den Sender **0x20** (UVR64).  
 → Extrahiert Temperaturen, Relaiszustände und weitere Werte.
 

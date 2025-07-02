@@ -10,7 +10,6 @@ namespace esphome {
 namespace uvr64_dlbus {
 
 static const uint32_t FRAME_TIMEOUT_US = 100000;  // 100ms
-static const uint32_t SYNC_MIN_US = 250000;       // 250ms, used for sync detection
 static const int MAX_BITS = 1024;
 
 class DLBusSensor : public Component {
@@ -36,7 +35,6 @@ class DLBusSensor : public Component {
   void parse_frame_();
   void log_frame_(const std::vector<uint8_t> &frame);
   bool decode_manchester_(std::vector<uint8_t> &result);
-  bool decode_sync_(std::vector<uint8_t> &result);
   void log_bits_();
   bool validate_frame_(const std::vector<uint8_t> &frame);
 
