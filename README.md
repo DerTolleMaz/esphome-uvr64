@@ -162,12 +162,7 @@ external_components:
       ref: main
     components: [uvr64_dlbus]
     refresh: always
-globals:
-  - id: dlbus_ptr
-    type: esphome::uvr64_dlbus::DLBusSensor*
-    restore_value: no
-    initial_value: 'nullptr'
-    #includes: ["uvr64_dlbus/dlbus_sensor.h"]
+
 # Sensoren deklarieren
 sensor:
   - platform: template
@@ -238,22 +233,6 @@ interval:
     - interval: 1s
       then:
       - logger.log: "DL-Bus läuft"
-      - lambda: |-
-          if (id(dlbus_ptr) == nullptr) {
-            auto dl = new esphome::uvr64_dlbus::DLBusSensor(id(uvr)->get_pin());
-            dl->set_temp_sensor(0, id(temp0));
-            dl->set_temp_sensor(1, id(temp1));
-            dl->set_temp_sensor(2, id(temp2));
-            dl->set_temp_sensor(3, id(temp3));
-            dl->set_temp_sensor(4, id(temp4));
-            dl->set_temp_sensor(5, id(temp5));
-            dl->set_relay_sensor(0, id(relay0));
-            dl->set_relay_sensor(1, id(relay1));
-            dl->set_relay_sensor(2, id(relay2));
-            dl->set_relay_sensor(3, id(relay3));
-            id(dlbus_ptr) = dl;
-            App.register_component(dl);
-          }
 
 
 ```
