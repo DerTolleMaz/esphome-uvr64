@@ -15,8 +15,14 @@ CONF_DEBUG = "debug"
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(DLBusSensor),
     cv.Required(CONF_PIN): pins.internal_gpio_input_pin_schema,
-    cv.Required(CONF_TEMP_SENSORS): cv.ensure_list(cv.use_id(sensor.Sensor)),
-    cv.Required(CONF_RELAY_SENSORS): cv.ensure_list(cv.use_id(binary_sensor.BinarySensor)),
+    cv.Required(CONF_TEMP_SENSORS): cv.All(
+        cv.ensure_list(cv.use_id(sensor.Sensor)),
+        cv.Length(min=6, max=6, msg="Exactly 6 temp_sensors must be specified"),
+    ),
+    cv.Required(CONF_RELAY_SENSORS): cv.All(
+        cv.ensure_list(cv.use_id(binary_sensor.BinarySensor)),
+        cv.Length(min=4, max=4, msg="Exactly 4 relay_sensors must be specified"),
+    ),
     cv.Optional(CONF_DEBUG, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
 
