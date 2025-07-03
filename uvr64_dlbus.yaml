@@ -12,13 +12,7 @@ external_components:
       ref: main
     components: [uvr64_dlbus]
     refresh: always
-globals:
-  - id: dlbus_ptr
-    type: esphome::uvr64_dlbus::DLBusSensor*
-    restore_value: no
-    initial_value: 'nullptr'
-    #includes: ["uvr64_dlbus/dlbus_sensor.h"]
-# Sensoren deklarieren
+
 sensor:
   - platform: template
     name: "UVR64 Solarthermie"
